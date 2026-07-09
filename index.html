@@ -1,0 +1,2310 @@
+<!DOCTYPE html>
+
+<html lang="zh-TW">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>放置天堂掉落查詢系統 v6.8B - db.js外部資料版</title>
+<style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --primary: #38bdf8;
+            --border-color: #334155;
+            --legendary: #ef4444;
+            /* 紅色 (極低機率) */
+            --rare: #fbbf24;
+            /* 金色 (低機率) */
+            --common: #4ade80;
+            /* 綠色 (高機率) */
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1200px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        h1 {
+            color: var(--primary);
+            margin-bottom: 10px;
+            font-size: 2rem;
+            letter-spacing: 1px;
+        }
+
+        .search-container {
+            margin-bottom: 30px;
+            width: 100%;
+        }
+
+        #searchInput {
+            width: 100%;
+            padding: 15px 20px;
+            font-size: 1.1rem;
+            background-color: var(--card-bg);
+            border: 2px solid var(--border-color);
+            border-radius: 10px;
+            color: var(--text-main);
+            box-sizing: border-box;
+            transition: border-color 0.3s ease;
+        }
+
+        #searchInput:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+            gap: 20px;
+        }
+
+        .monster-card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            transition: transform 0.2s ease, border-color 0.2s ease;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .monster-card:hover {
+            transform: translateY(-3px);
+            border-color: var(--primary);
+        }
+
+        .monster-header {
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 10px;
+            margin-bottom: 12px;
+        }
+
+        .monster-name {
+            font-size: 1.4rem;
+            font-weight: bold;
+            color: var(--primary);
+            margin: 0 0 8px 0;
+        }
+
+        .monster-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-bottom: 8px;
+        }
+
+        .meta-badge {
+            font-size: 0.75rem;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 2px 6px;
+            border-radius: 4px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--text-muted);
+        }
+
+        .meta-badge.active-behavior {
+            color: #f87171;
+            border-color: rgba(248, 113, 113, 0.3);
+            background: rgba(248, 113, 113, 0.05);
+        }
+
+        .meta-badge.passive-behavior {
+            color: #4ade80;
+            border-color: rgba(74, 222, 128, 0.3);
+            background: rgba(74, 222, 128, 0.05);
+        }
+
+        .monster-location {
+            font-size: 0.8rem;
+            color: #fbbf24;
+            margin-top: 4px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .monster-skills {
+            margin-top: 6px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+        }
+        .skill-chip {
+            font-size: 0.78rem;
+            color: #f0abfc;
+            background: rgba(217, 70, 239, 0.12);
+            border: 1px solid rgba(217, 70, 239, 0.4);
+            border-radius: 6px;
+            padding: 2px 8px;
+            white-space: nowrap;
+        }
+
+        .drop-list {
+            margin-top: 5px;
+        }
+
+        .drop-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px dashed rgba(255, 255, 255, 0.05);
+            font-size: 0.95rem;
+        }
+
+        .drop-item:last-child {
+            border-bottom: none;
+        }
+
+        .item-name {
+            color: var(--text-main);
+        }
+
+        .item-rate {
+            background: rgba(0, 0, 0, 0.4);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 500;
+            font-family: monospace;
+        }
+
+        .rate-legendary {
+            color: var(--legendary);
+            text-shadow: 0 0 5px rgba(239, 68, 68, 0.4);
+            font-weight: bold;
+        }
+
+        .rate-rare {
+            color: var(--rare);
+        }
+
+        .rate-common {
+            color: var(--common);
+        }
+
+        .no-results {
+            text-align: center;
+            grid-column: 1 / -1;
+            padding: 40px 0;
+            color: var(--text-muted);
+            font-size: 1.1rem;
+            line-height: 1.8;
+        }
+
+        /* 🌟 懸浮資訊視窗樣式 */
+        .drop-list li {
+            position: relative;
+            cursor: help;
+        }
+
+        .drop-list li::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 125%;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(15, 23, 42, 0.95);
+            color: #38bdf8;
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: 1px solid #334155;
+            font-size: 0.85rem;
+            white-space: pre-line;
+            max-width: 340px;
+            text-align: left;
+            line-height: 1.55;
+            z-index: 999;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease, transform 0.2s ease;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+        }
+
+        .drop-list li:hover::after {
+            opacity: 1;
+            transform: translateX(-50%) translateY(-4px);
+        }
+
+        /* 🌟 懸浮資訊視窗樣式 */
+        .drop-list li {
+            position: relative;
+            cursor: help;
+        }
+
+        .drop-list li::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 125%;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(15, 23, 42, 0.95);
+            color: #38bdf8;
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: 1px solid #334155;
+            font-size: 0.85rem;
+            white-space: pre-line;
+            max-width: 340px;
+            text-align: left;
+            line-height: 1.55;
+            z-index: 999;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease, transform 0.2s ease;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+        }
+
+        .drop-list li:hover::after {
+            opacity: 1;
+            transform: translateX(-50%) translateY(-4px);
+        }
+
+        .area-bonus {
+            background-color: rgba(56, 189, 248, 0.1);
+            border: 1px solid var(--primary);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 30px;
+            font-size: 0.95rem;
+            color: var(--text-muted);
+        }
+
+        .area-bonus strong {
+            color: var(--primary);
+        }
+
+        /* 席琳世界切換按鈕 */
+        .world-toggle {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 12px 18px;
+        }
+
+        .world-toggle-label {
+            font-size: 0.95rem;
+            color: var(--text-muted);
+            flex-shrink: 0;
+        }
+
+        .toggle-btn-group {
+            display: flex;
+            gap: 8px;
+        }
+
+        .toggle-btn {
+            padding: 7px 18px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background: transparent;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: 500;
+        }
+
+        .toggle-btn:hover {
+            border-color: var(--primary);
+            color: var(--text-main);
+        }
+
+        .toggle-btn.active-normal {
+            background: rgba(56, 189, 248, 0.15);
+            border-color: var(--primary);
+            color: var(--primary);
+            font-weight: bold;
+        }
+
+        .toggle-btn.active-classic {
+            background: rgba(251, 191, 36, 0.12);
+            border-color: #fbbf24;
+            color: #fbbf24;
+            font-weight: bold;
+        }
+        .classic-info-box {
+            display: none;
+            border: 1px solid rgba(251, 191, 36, 0.4);
+            background: rgba(251, 191, 36, 0.05);
+            border-radius: 8px;
+            padding: 14px 18px;
+            margin-bottom: 20px;
+            font-size: 0.9rem;
+            color: #94a3b8;
+        }
+        .classic-info-box.visible { display: block; }
+        .classic-info-box strong { color: #fbbf24; }
+        .toggle-btn.active-sherine {
+            background: rgba(74, 222, 128, 0.12);
+            border-color: #4ade80;
+            color: #4ade80;
+            font-weight: bold;
+            animation: sherineBtn 2.5s ease-in-out infinite;
+        }
+
+        @keyframes sherineBtn {
+            0%, 100% { box-shadow: 0 0 6px rgba(74,222,128,0.3); }
+            50% { box-shadow: 0 0 14px rgba(74,222,128,0.7); }
+        }
+
+        .toggle-btn.active-mad {
+            background: rgba(248, 113, 113, 0.12);
+            border-color: #f87171;
+            color: #f87171;
+            font-weight: bold;
+            animation: madBtn 2s ease-in-out infinite;
+        }
+
+        @keyframes madBtn {
+            0%, 100% { box-shadow: 0 0 6px rgba(248,113,113,0.35); }
+            50% { box-shadow: 0 0 16px rgba(248,113,113,0.8); }
+        }
+
+        body.sherine-mad .monster-card {
+            border-color: rgba(248, 113, 113, 0.45);
+        }
+        body.sherine-mad header h1 {
+            text-shadow: 0 0 12px rgba(248, 113, 113, 0.6);
+        }
+
+        /* 席琳世界：怪物卡片樣式 */
+        body.sherine-mode .monster-card {
+            border-color: rgba(127, 29, 29, 0.5);
+            background: linear-gradient(135deg, #1a0508 0%, #1e293b 100%);
+        }
+
+        body.sherine-mode .monster-card:hover {
+            border-color: #4ade80;
+        }
+
+        body.sherine-mode header h1 {
+            color: #4ade80;
+            text-shadow: 0 0 10px rgba(74,222,128,0.5);
+        }
+
+        body.sherine-mode {
+            background-color: #1a0508;
+        }
+
+        /* 席琳強化數值 badge */
+        .sherine-stat {
+            color: #4ade80 !important;
+            font-weight: bold;
+        }
+
+        .sherine-stat-up::after {
+            content: '↑';
+            font-size: 0.7em;
+            margin-left: 2px;
+            color: #4ade80;
+        }
+
+        /* 席琳世界說明框 */
+        .sherine-info-box {
+            border: 1px solid rgba(74, 222, 128, 0.4);
+            background: rgba(74, 222, 128, 0.05);
+            border-radius: 8px;
+            padding: 14px 18px;
+            margin-bottom: 20px;
+            font-size: 0.9rem;
+            color: #94a3b8;
+            display: none;
+        }
+
+        .sherine-info-box.visible {
+            display: block;
+        }
+
+        .sherine-info-box strong {
+            color: #4ade80;
+        }
+
+        .sherine-grace-box {
+            border: 1px solid rgba(239, 68, 68, 0.4);
+            background: rgba(239, 68, 68, 0.04);
+            border-radius: 8px;
+            padding: 14px 18px;
+            margin-bottom: 20px;
+            font-size: 0.9rem;
+            color: #94a3b8;
+            display: none;
+        }
+
+        .sherine-grace-box.visible {
+            display: block;
+        }
+
+        .sherine-grace-box strong {
+            color: #f87171;
+        }
+
+        .sherine-drop-box {
+            border: 1px solid rgba(56, 189, 248, 0.4);
+            background: rgba(56, 189, 248, 0.04);
+            border-radius: 8px;
+            padding: 14px 18px;
+            margin-bottom: 20px;
+            font-size: 0.9rem;
+            color: #94a3b8;
+            display: none;
+        }
+
+        .sherine-drop-box.visible {
+            display: block;
+        }
+
+        .sherine-drop-box strong {
+            color: #38bdf8;
+        }
+
+        .drop-rate-multiplier {
+            font-size: 0.78rem;
+            color: #4ade80;
+            margin-left: 6px;
+        }
+    
+        /* ===== 職業技能/套裝 分頁 ===== */
+        .main-tabs { display:flex; gap:8px; margin:0 0 16px; }
+        .main-tab { flex:1; padding:10px; border:1px solid var(--border,#334155); background:rgba(30,41,59,0.5); color:#cbd5e1; border-radius:8px; cursor:pointer; font-size:1rem; font-weight:bold; transition:all .15s; }
+        .main-tab.active { background:linear-gradient(180deg,#1e3a8a,#1e293b); color:#fff; border-color:#3b82f6; }
+        .ss-class-bar { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
+        .ss-cls-btn { padding:7px 14px; border:1px solid #334155; background:rgba(15,23,42,0.6); color:#cbd5e1; border-radius:6px; cursor:pointer; font-weight:bold; font-size:0.9rem; }
+        .ss-cls-btn.active { background:#7c3aed; color:#fff; border-color:#a855f7; }
+        .ss-search { width:100%; padding:10px 14px; border:1px solid #334155; background:rgba(15,23,42,0.6); color:#f1f5f9; border-radius:8px; margin-bottom:14px; font-size:0.95rem; }
+        .ss-tier-head { color:#94a3b8; font-size:0.85rem; font-weight:bold; margin:14px 0 6px; border-bottom:1px solid #334155; padding-bottom:4px; }
+        .skill-card { background:rgba(30,41,59,0.55); border:1px solid #334155; border-left:3px solid #a855f7; border-radius:8px; padding:10px 12px; margin-bottom:8px; }
+        .skill-card .sk-top { display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; }
+        .skill-card .sk-name { font-weight:bold; color:#f1f5f9; font-size:0.98rem; }
+        .skill-card .sk-badges { display:flex; gap:5px; flex-wrap:wrap; }
+        .sk-badge { font-size:0.72rem; padding:1px 7px; border-radius:5px; background:rgba(59,130,246,0.15); border:1px solid rgba(59,130,246,0.35); color:#93c5fd; white-space:nowrap; }
+        .sk-badge.lv { background:rgba(56,189,248,0.15); border-color:rgba(56,189,248,0.4); color:#7dd3fc; }
+        .sk-badge.mp { background:rgba(168,85,247,0.15); border-color:rgba(168,85,247,0.4); color:#d8b4fe; }
+        .sk-badge.passive { background:rgba(148,163,184,0.15); border-color:rgba(148,163,184,0.4); color:#cbd5e1; }
+        .sk-eff { color:#86efac; font-size:0.85rem; margin-top:5px; }
+        .sk-meta { color:#64748b; font-size:0.78rem; margin-top:3px; }
+        .set-card { background:rgba(30,41,59,0.55); border:1px solid #334155; border-left:3px solid #22c55e; border-radius:8px; padding:10px 12px; margin-bottom:8px; }
+        .set-card .set-name { font-weight:bold; color:#4ade80; font-size:0.98rem; }
+        .set-card .set-items { color:#cbd5e1; font-size:0.85rem; margin-top:4px; }
+        .set-card .set-bonus { color:#fbbf24; font-size:0.86rem; margin-top:4px; font-weight:bold; }
+        .sherine-grp { background:rgba(5,46,22,0.4); border:1px solid #166534; border-radius:8px; padding:10px 12px; margin-bottom:8px; }
+        .sherine-grp .sg-name { color:#4ade80; font-weight:bold; }
+        .sherine-grp .sg-aff { color:#86efac; font-size:0.82rem; margin:4px 0; }
+        .sherine-grp .sg-bonus { color:#cbd5e1; font-size:0.84rem; }
+</style>
+<body>
+<div class="container">
+<header>
+<h1>🐉 放置天堂掉落查詢系統 <span style="font-size:0.5em; color:#94a3b8; font-weight:normal; vertical-align:middle;">v6.8B</span></h1>
+<p style="color: var(--text-muted);">支援多功能進階搜尋（如：地靈、流星雨、古魯丁地區、火屬性、主動）</p>
+</header>
+<div class="main-tabs">
+    <button class="main-tab active" id="mtab-drop" onclick="switchMainTab('drop')">🗡️ 掉落查詢</button>
+    <button class="main-tab" id="mtab-skill" onclick="switchMainTab('skill')">📖 技能・套裝・寵物</button>
+    <button class="main-tab" id="mtab-items" onclick="switchMainTab('items')">📦 裝備・道具圖鑑</button>
+</div>
+<div id="tabDrop">
+<div class="world-toggle">
+    <span class="world-toggle-label">🌍 世界模式：</span>
+    <div class="toggle-btn-group">
+        <button class="toggle-btn active-normal" id="btnNormal" onclick="setWorldMode('normal')">⚔️ 普通世界</button>
+        <button class="toggle-btn" id="btnSherine" onclick="setWorldMode('sherine')">🔮 席琳世界</button>
+        <button class="toggle-btn" id="btnMad" onclick="setWorldMode('mad')">🔥 瘋狂的席琳</button>
+        <button class="toggle-btn" id="btnClassic" onclick="setWorldMode('classic')">⚔️ 經典模式</button>
+    </div>
+    <span id="worldModeDesc" style="font-size:0.85rem; color: var(--text-muted); margin-left:4px;">顯示原始怪物數值與掉落機率</span>
+</div>
+
+<div class="sherine-info-box" id="sherineInfoBox">
+    <strong>🔮 席琳世界 — 強化效果（Lv40以上祈禱開啟）〔數值＝一般／<span style="color:#f87171">🔥瘋狂</span>〕</strong><br>
+    攻城區及血盟敵人<strong>不受影響</strong>。兩種席琳互斥，怪物數值變化：
+    <span style="color:#4ade80">HP ×3／<b style="color:#f87171">×5</b>、AC −10（BOSS −20，兩者同）、MR ×1.5／<b style="color:#f87171">×3</b>、命中 ×1.5／<b style="color:#f87171">×2</b>、傷害減免 +等級/3、一般攻擊 ×2／<b style="color:#f87171">×3</b>、技能傷害 ×2／<b style="color:#f87171">×3</b></span>、
+    <span style="color:#fbbf24">經驗 ×5／<b style="color:#f87171">×10</b>、金錢 ×5／<b style="color:#f87171">×10</b>、掉落機率 ×3／<b style="color:#f87171">×5</b></span>。
+    套裝效果掉落機率：<span style="color:#4ade80">一般怪 0.1%、BOSS 5%</span>（<span style="color:#f87171">🔥瘋狂再 ×3</span>）。搜索時間縮短10秒。
+</div>
+
+<div class="sherine-grace-box" id="sherineGraceBox">
+    <strong>✨ 席琳的恩賜（額外疊加）</strong> — 每次刷怪 <strong>1%</strong> 觸發：場上隨機一隻怪獲得
+    <span style="color:#f87171">HP ×10（完全恢復）</span>、
+    <span style="color:#fbbf24">經驗 ×10、金錢 ×10、掉落機率 ×10</span>。
+    套裝機率提升至 <span style="color:#4ade80">0.5%</span>。<br>
+    <span style="color:#4ade80">一般席琳</span>：冷卻3分鐘、場上同時僅一隻、BOSS 不受恩賜；
+    <span style="color:#f87171">🔥瘋狂席琳：無冷卻、無隻數限制、BOSS 也可獲得恩賜</span>。
+</div>
+
+<div class="sherine-drop-box" id="sherineDropBox">
+    <strong>💎 席琳結晶 — 限定掉落（固定機率，不吃掉落倍率）</strong><br>
+    血盟與 Lv20 以下不掉落。非 BOSS 怪物：
+    <span style="color:#4ade80">Lv21~40：0.001%</span>、
+    <span style="color:#fbbf24">Lv41+：0.003%</span>。<br>
+    BOSS 怪物：
+    <span style="color:#4ade80">夢幻之島 BOSS：0.01%</span>、
+    <span style="color:#fbbf24">三大龍：10%</span>、
+    <span style="color:#fbbf24">其餘 BOSS：0.1%</span>。<br>
+    <span style="color:#f87171">🔥 瘋狂的席琳世界：結晶掉率 ×3（一般怪／BOSS 皆然）；席琳套裝效果（席琳詞綴）出現率亦 ×3</span>。
+</div>
+
+<div class="classic-info-box" id="classicInfoBox">
+    <strong>⚔️ 經典模式（硬核）— 數值懲罰</strong><br>
+    <span style="color:#fbbf24">物品掉落 ×1/10、經驗 ×½、金幣 ×10%、賣價 ×3%（定價）</span>、死亡損失該等級 <strong>10% 最大經驗</strong>（不降等）。<br>
+    <strong>停用功能：</strong>無法使用賦予祝福、無法學精通、不能進席琳世界；停用 共鳴・魔擊・連射・反擊・居合・切割・穿透・騎士看破/殺戮。<br>
+    倉庫與傭兵<strong>與非經典模式不共通</strong>。下方掉落機率已套用 <strong>×1/10</strong>。
+</div>
+
+<div class="search-container">
+<input id="searchInput" onkeyup="filterData()" placeholder="🔍 請輸入想搜尋的 怪物、物品、地圖名稱、種族 或 屬性..." type="text"/>
+<div style="text-align:center; font-size:0.78rem; color:var(--text-muted); margin-top:6px;">物品名稱旁圖示＝額外取得來源： 🔨 可製作 ｜ 🏪 商店販售 ｜ 🔁 可兌換 <span style="opacity:0.7;">（怪物掉落已列於各怪物下方；無圖示者表示無固定取得來源）</span></div>
+</div>
+<div class="area-bonus">
+<strong>📍 區域額外掉落：</strong> 眠龍洞穴1~3樓、妖精森林周邊 的所有怪物，皆有 2% 機率額外掉落 粗糙的米索莉塊 / 精靈玉 / 元素石。（若學會「世界樹的呼喚」則提升為 3%）
+        </div>
+    <div class="area-bonus" style="border-color:#475569; background-color:rgba(100,116,139,0.06);">
+        <strong>🖤 黑魔石世界掉落（黑暗妖精素材）：</strong>
+        <strong>沉默洞穴周邊</strong> 所有怪固定掉落 <span class="rate-common">二級黑魔石 20%</span> / <span class="rate-common">三級黑魔石 10%</span>（學會 <strong>提煉魔石</strong> 後提升為 <span class="rate-uncommon">30%</span> / <span class="rate-uncommon">15%</span>）。
+        <strong>其他野外／地監區域</strong> 須先學會 <strong>提煉魔石</strong> 才會掉落 <span class="rate-uncommon">二級 1%</span> / <span class="rate-rare">三級 0.5%</span> / <span class="rate-legendary">四級 0.1%</span>。
+        <br><small style="color: var(--text-muted);">※ 未學「提煉魔石」時，沉默洞穴以外的野外／地監完全不掉黑魔石；<strong>四級黑魔石僅能透過此途徑（學技能後的野外或地監）取得</strong>。攻城區不掉。</small>
+        </div>
+    <div class="area-bonus" style="border-color: var(--rare); background-color: rgba(251, 191, 36, 0.05);">
+            <strong>👑 全域 BOSS 掉落緊急特報：
+            </strong> 等級 <strong>40等以上</strong> 的 BOSS 魔物，有機率獨立判定額外掉落 
+            <span class="rate-rare">賦予武器祝福卷軸 (0.1%)</span>、
+            <span class="rate-rare">賦予盔甲祝福卷軸 (0.1%)</span>、
+            <span class="rate-legendary">賦予飾品祝福卷軸 (0.01%)</span>。
+            <br><small style="color: var(--text-muted);">※ 注意：此特殊掉落不包含「夢幻之島」以及「攻城區域」魔物。</small>
+</div>
+    <div class="area-bonus" style="border-color:#f59e0b; background-color:rgba(245,158,11,0.06);">
+        <strong>⚒️ 強化系統（V1.65）：</strong>
+        武器最高 <strong>+20</strong>、防具 <strong>+15</strong>、飾品 <strong>+5</strong>；達上限改顯示 <span class="rate-legendary">淬鍊</span>。強化值<strong>超過 +20 一律以 +20 計算</strong>（多餘數值鎖定）。
+        <br><small style="color: var(--text-muted);">
+        ※ 武器 <strong>+11</strong> 起不再增加「額外傷害」，改為提升「<strong>最終傷害%</strong>」，<strong>+20 約 2 倍傷害</strong>（基底越高提升越多）；<strong>+12</strong> 起每 +1 命中提升加大，+20 約等同舊版 +35 命中。
+        ※ 防具 <strong>+11</strong> 以上 -AC 提升加大。
+        ※ 飾品強化上限改為 <strong>+5</strong>：<strong>項鍊</strong>強化提升 <strong>MR</strong>、<strong>戒指</strong>維持 <strong>-AC</strong>、<strong>腰帶</strong>提升 <strong>負重</strong>。
+        ※ 戒指槽位：<strong>55 等</strong>可裝第 3 顆、<strong>65 等</strong>第 4 顆；傳送/變形/召喚控制戒指<strong>各限裝 1 顆、多裝不疊加</strong>。
+        ※ 本表顯示為「<strong>基礎數值</strong>」，不含強化加成。
+        </small>
+    </div>
+    <div class="area-bonus" style="border-color:#a3e635; background-color:rgba(163,230,53,0.06);">
+        <strong>🧪 萬能藥世界掉落（V1.65）：</strong>
+        等級 <strong>40 等以上</strong> 的所有怪物與頭目，皆有機率額外掉落萬能藥（擊殺後隨機獲得 6 種萬能藥之一）：一般怪 <span class="rate-legendary">0.01%</span> / 頭目 <span class="rate-rare">1%</span>。
+        <br><small style="color: var(--text-muted);">※ 排除「夢幻之島」頭目。夢幻之島元素一樣會掉，但已不需專蹲夢島刷萬能藥，平均效率相近。</small>
+    </div>
+<div class="grid" id="monsterGrid"></div>
+</div><!-- /tabDrop -->
+<div id="tabSkillset" style="display:none;">
+<div class="ss-class-bar">
+    <button class="ss-cls-btn active" data-cls="knight" onclick="renderSkillset('knight')">🛡️ 騎士</button>
+    <button class="ss-cls-btn" data-cls="mage" onclick="renderSkillset('mage')">🔮 法師</button>
+    <button class="ss-cls-btn" data-cls="elf" onclick="renderSkillset('elf')">🏹 妖精</button>
+    <button class="ss-cls-btn" data-cls="dark" onclick="renderSkillset('dark')">🗡️ 黑暗妖精</button>
+    <button class="ss-cls-btn" data-cls="illusion" onclick="renderSkillset('illusion')">🎭 幻術士</button>
+    <button class="ss-cls-btn" data-cls="dragon" onclick="renderSkillset('dragon')">🐲 龍騎士</button>
+    <button class="ss-cls-btn" data-cls="warrior" onclick="renderSkillset('warrior')">⚔️ 戰士</button>
+    <button class="ss-cls-btn" data-cls="royal" onclick="renderSkillset('royal')">👑 王族</button>
+    <button class="ss-cls-btn" data-cls="sets" onclick="renderSkillset('sets')">✨ 套裝</button>
+    <button class="ss-cls-btn" data-cls="pet" onclick="renderSkillset('pet')">🐾 寵物進化</button>
+</div>
+<input id="ssSearch" class="ss-search" onkeyup="renderSkillset()" placeholder="🔍 篩選技能 / 套裝名稱...">
+<div id="ssContent"></div>
+</div>
+<div id="tabItems" style="display:none;">
+<style>
+  .ic-layout { display:grid; grid-template-columns:210px minmax(0,1fr); gap:16px; width:100%; align-items:start; }
+  .ic-sidebar { width:210px; flex-shrink:0; }
+  .ic-sidebar-sticky { position:sticky; top:16px; }
+  .ic-group { margin-bottom:6px; }
+  .ic-group-header { display:flex; align-items:center; gap:6px; padding:7px 11px; background:rgba(30,41,59,0.7); border:1px solid #334155; border-radius:8px; cursor:pointer; font-weight:bold; color:#94a3b8; font-size:0.88rem; user-select:none; transition:all .15s; }
+  .ic-group-header:hover,.ic-group-header.open { border-color:#3b82f6; color:#e2e8f0; }
+  .ic-group-header .arrow { margin-left:auto; transition:transform .2s; font-size:0.7rem; }
+  .ic-group-header.open .arrow { transform:rotate(90deg); }
+  .ic-sublist { display:none; padding:3px 0 3px 8px; }
+  .ic-group.open .ic-sublist { display:block; }
+  .ic-sub-btn { display:block; width:100%; text-align:left; padding:5px 11px; background:transparent; border:none; color:#94a3b8; cursor:pointer; font-size:0.82rem; border-radius:6px; transition:all .1s; }
+  .ic-sub-btn:hover { background:rgba(59,130,246,0.1); color:#e2e8f0; }
+  .ic-sub-btn.active { background:rgba(59,130,246,0.2); color:#93c5fd; font-weight:bold; }
+  .ic-main { flex:1; min-width:0; }
+  .ic-toolbar { display:flex; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap; }
+  .ic-search { flex:1; min-width:180px; padding:9px 13px; font-size:0.9rem; background:#1e293b; border:1px solid #334155; border-radius:8px; color:#f8fafc; outline:none; }
+  .ic-search:focus { border-color:#3b82f6; }
+  .ic-breadcrumb { font-size:0.78rem; color:#64748b; margin-bottom:8px; padding:2px 6px; }
+  .ic-count { font-size:0.78rem; color:#64748b; margin-bottom:8px; }
+  .ic-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(155px,1fr)); gap:9px; }
+  .ic-card { background:#1e293b; border:1px solid #334155; border-radius:8px; padding:10px 11px; cursor:pointer; transition:all .15s; display:flex; flex-direction:column; gap:3px; }
+  .ic-card:hover { border-color:#3b82f6; transform:translateY(-2px); box-shadow:0 4px 10px rgba(59,130,246,.15); }
+  .ic-card.legend-card { border-color:rgba(239,68,68,0.35); }
+  .ic-card.legend-card:hover { border-color:#ef4444; }
+  .ic-card-name { font-size:0.85rem; font-weight:bold; color:#e2e8f0; line-height:1.3; }
+  .ic-card-name.ltext { color:#fca5a5; }
+  .ic-card-tag { display:inline-block; font-size:0.68rem; padding:1px 5px; border-radius:4px; background:rgba(59,130,246,0.15); color:#93c5fd; margin-top:1px; }
+  .ic-card-sub { font-size:0.72rem; color:#64748b; margin-top:auto; padding-top:3px; }
+  /* 詳情 Modal */
+  .ic-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:2000; align-items:center; justify-content:center; }
+  .ic-overlay.open { display:flex; }
+  .ic-modal { background:#1e293b; border:1px solid #334155; border-radius:12px; padding:22px 24px 20px; max-width:560px; width:92%; max-height:82vh; overflow-y:auto; position:relative; box-shadow:0 8px 32px rgba(0,0,0,.5); }
+  .ic-modal-close { position:absolute; top:12px; right:14px; background:none; border:none; color:#64748b; font-size:1.1rem; cursor:pointer; }
+  .ic-modal-close:hover { color:#e2e8f0; }
+  .ic-modal h2 { font-size:1.1rem; font-weight:bold; margin:0 0 2px; }
+  .ic-modal-sub { font-size:0.78rem; color:#64748b; margin-bottom:14px; }
+  .ic-section-title { font-size:0.74rem; color:#64748b; text-transform:uppercase; letter-spacing:.05em; margin:12px 0 6px; border-bottom:1px solid #1e3a5a44; padding-bottom:3px; }
+  .ic-stat-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:3px 14px; }
+  .ic-stat-row { display:flex; justify-content:space-between; font-size:0.83rem; padding:2px 0; }
+  .ic-stat-l { color:#94a3b8; }
+  .ic-stat-v { color:#e2e8f0; text-align:right; }
+  .ic-desc { font-size:0.82rem; color:#cbd5e1; line-height:1.65; }
+  .ic-src-list { list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:3px; }
+  .ic-src-item { display:flex; justify-content:space-between; align-items:center; padding:4px 9px; background:rgba(15,23,42,0.5); border-radius:5px; font-size:0.82rem; }
+  .ic-src-mob { color:#cbd5e1; }
+  .r-common { color:#4ade80; }
+  .r-uncommon { color:#fbbf24; }
+  .r-rare { color:#f97316; }
+  .r-legend { color:#ef4444; }
+  .ic-no-src { font-size:0.82rem; color:#475569; font-style:italic; }
+</style>
+<div class="ic-layout">
+  <div class="ic-sidebar"><div class="ic-sidebar-sticky" id="icSidebar"></div></div>
+  <div class="ic-main">
+    <div class="ic-toolbar">
+      <input class="ic-search" id="icSearch" placeholder="🔍 搜尋道具名稱..." oninput="icFilter()">
+    </div>
+    <div class="ic-breadcrumb" id="icBreadcrumb">📦 選擇左側分類</div>
+    <div class="ic-count" id="icCount"></div>
+    <div class="ic-grid" id="icGrid"></div>
+  </div>
+</div>
+<div class="ic-overlay" id="icOverlay" onclick="if(event.target===this)closeIcModal()">
+  <div class="ic-modal" id="icModalBox">
+    <button class="ic-modal-close" onclick="closeIcModal()">✕</button>
+    <div id="icModalContent"></div>
+  </div>
+</div>
+</div><!-- /tabItems -->
+</div><!-- /container -->
+<script>
+
+        // 物品放置區
+
+        window.SKILLS_TAB = {"knight":[{"n":"初級治癒術","lv":16,"mp":4,"tier":1,"type":"heal","eff":"回復HP 20+(1~20)","rx":"","bk":"魔法書(初級治癒術)"},{"n":"日光術","lv":16,"mp":4,"tier":1,"type":"buff","eff":"你更容易被怪物發現了。","rx":"","bk":"魔法書(日光術)"},{"n":"保護罩","lv":16,"mp":2,"tier":1,"type":"buff","eff":"AC+2","rx":"","bk":"魔法書(保護罩)"},{"n":"光箭","lv":16,"mp":3,"tier":1,"type":"atk","eff":"魔法攻擊","rx":"","bk":"魔法書(光箭)"},{"n":"傳送術","lv":16,"mp":5,"tier":1,"type":"manual","eff":"","rx":"","bk":"魔法書(指定傳送)"},{"n":"冰箭","lv":16,"mp":3,"tier":1,"type":"atk","eff":"魔法攻擊","rx":"","bk":"魔法書(冰箭)"},{"n":"風刃","lv":16,"mp":3,"tier":1,"type":"atk","eff":"魔法攻擊","rx":"","bk":"魔法書(風刃)"},{"n":"神聖武器","lv":16,"mp":10,"tier":1,"type":"buff","eff":"額外傷害+1、額外命中+1","rx":"","bk":"魔法書(神聖武器)"},{"n":"增幅防禦","lv":30,"mp":10,"tier":1,"type":"buff","eff":"","rx":"","bk":"技術書(增幅防禦)"},{"n":"衝擊之暈","lv":30,"mp":12,"tier":1,"type":"atk","eff":"","rx":"需特定武器","bk":"技術書(衝擊之暈)"},{"n":"尖刺盔甲","lv":30,"mp":10,"tier":1,"type":"buff","eff":"近距離命中+5","rx":"","bk":"技術書(尖刺盔甲)"},{"n":"堅固防護","lv":40,"mp":5,"tier":2,"type":"buff","eff":"ER迴避+15","rx":"需裝盾","bk":"技術書(堅固防護)"},{"n":"反擊屏障","lv":30,"mp":10,"tier":1,"type":"buff","eff":"進入反擊架式（持續64秒），受擊時反擊","rx":"","bk":"技術書(反擊屏障)"}],"mage":[{"n":"初級治癒術","lv":4,"mp":4,"tier":1,"type":"heal","eff":"回復HP 20+(1~20)","rx":"","bk":"魔法書(初級治癒術)"},{"n":"日光術","lv":4,"mp":4,"tier":1,"type":"buff","eff":"你更容易被怪物發現了。","rx":"","bk":"魔法書(日光術)"},{"n":"保護罩","lv":4,"mp":2,"tier":1,"type":"buff","eff":"AC+2","rx":"","bk":"魔法書(保護罩)"},{"n":"光箭","lv":4,"mp":3,"tier":1,"type":"atk","eff":"魔法攻擊","rx":"","bk":"魔法書(光箭)"},{"n":"傳送術","lv":4,"mp":5,"tier":1,"type":"manual","eff":"","rx":"","bk":"魔法書(指定傳送)"},{"n":"冰箭","lv":4,"mp":3,"tier":1,"type":"atk","eff":"魔法攻擊","rx":"","bk":"魔法書(冰箭)"},{"n":"風刃","lv":4,"mp":3,"tier":1,"type":"atk","eff":"魔法攻擊","rx":"","bk":"魔法書(風刃)"},{"n":"神聖武器","lv":4,"mp":10,"tier":1,"type":"buff","eff":"額外傷害+1、額外命中+1","rx":"","bk":"魔法書(神聖武器)"},{"n":"解毒術","lv":8,"mp":8,"tier":2,"type":"heal","eff":"回復HP 0","rx":"","bk":"魔法書(解毒術)"},{"n":"寒冷戰慄","lv":8,"mp":9,"tier":2,"type":"atk","eff":"魔法攻擊、吸血（造成傷害時回復HP）","rx":"","bk":"魔法書(寒冷戰慄)"},{"n":"毒咒","lv":8,"mp":10,"tier":2,"type":"atk","eff":"魔法攻擊、附加：中毒（15秒）","rx":"","bk":"魔法書(毒咒)"},{"n":"擬似魔法武器","lv":8,"mp":20,"tier":2,"type":"buff","eff":"額外傷害+2","rx":"","bk":"魔法書(擬似魔法武器)"},{"n":"無所遁形術","lv":8,"mp":8,"tier":2,"type":"buff","eff":"","rx":"","bk":"魔法書(無所遁形術)"},{"n":"負重強化","lv":8,"mp":0,"tier":2,"type":"passive","eff":"被動效果","rx":"","bk":"魔法書(負重強化)"},{"n":"火箭","lv":8,"mp":3,"tier":2,"type":"atk","eff":"魔法攻擊","rx":"","bk":"魔法書(火箭)"},{"n":"地獄之牙","lv":8,"mp":3,"tier":2,"type":"atk","eff":"魔法攻擊","rx":"","bk":"魔法書(地獄之牙)"},{"n":"極光雷電","lv":12,"mp":13,"tier":3,"type":"atk","eff":"魔法攻擊","rx":"","bk":"魔法書(極光雷電)"},{"n":"起死回生術","lv":12,"mp":15,"tier":3,"type":"atk","eff":"魔法攻擊","rx":"","bk":"魔法書(起死回生術)"},{"n":"中級治癒術","lv":12,"mp":11,"tier":3,"type":"heal","eff":"回復HP 50+(1~50)","rx":"","bk":"魔法書(中級治癒術)"},{"n":"闇盲咒術","lv":12,"mp":20,"tier":3,"type":"atk","eff":"魔法攻擊、附加：致盲（10秒）","rx":"","bk":"魔法書(闇盲咒術)"},{"n":"鎧甲護持","lv":12,"mp":20,"tier":3,"type":"buff","eff":"AC+3","rx":"","bk":"魔法書(鎧甲護持)"},{"n":"寒冰氣息","lv":12,"mp":9,"tier":3,"type":"atk","eff":"魔法攻擊","rx":"","bk":"魔法書(寒冰氣息)"},{"n":"能量感測","lv":12,"mp":8,"tier":3,"type":"manual","eff":"","rx":"","bk":"魔法書(能量感測)"},{"n":"燃燒的火球","lv":12,"mp":16,"tier":3,"type":"atk","eff":"魔法攻擊","rx":"","bk":"魔法書(燃燒的火球)"},{"n":"通暢氣脈術","lv":16,"mp":45,"tier":4,"type":"buff","eff":"敏+5","rx":"","bk":"魔法書(通暢氣脈術)"},{"n":"壞物術","lv":16,"mp":20,"tier":4,"type":"atk","eff":"魔法攻擊、附加：破壞（25秒）","rx":"","bk":"魔法書(壞物術)"},{"n":"吸血鬼之吻","lv":16,"mp":13,"tier":4,"type":"atk","eff":"魔法攻擊、吸血（造成傷害時回復HP）","rx":"","bk":"魔法書(吸血鬼之吻)"},{"n":"緩速術","lv":16,"mp":20,"tier":4,"type":"atk","eff":"魔法攻擊、附加：緩速（30秒）","rx":"","bk":"魔法書(緩速術)"},{"n":"岩牢","lv":16,"mp":11,"tier":4,"type":"atk","eff":"魔法攻擊","rx":"","bk":"魔法書(岩牢)"},{"n":"魔法屏障","lv":16,"mp":16,"tier":4,"type":"buff","eff":"","rx":"","bk":"魔法書(魔法屏障)"},{"n":"冥想術","lv":16,"mp":10,"tier":4,"type":"buff","eff":"MP回復+5","rx":"","bk":"魔法書(冥想術)"},{"n":"木乃伊的詛咒","lv":20,"mp":35,"tier":5,"type":"atk","eff":"魔法攻擊、附加：石化（6秒）","rx":"","bk":"魔法書(木乃伊的詛咒)"},{"n":"迷魅術","lv":20,"mp":30,"tier":5,"type":"manual","eff":"","rx":"","bk":"魔法書(迷魅術)"},{"n":"極道落雷","lv":20,"mp":25,"tier":5,"type":"atk","eff":"魔法攻擊","rx":"","bk":"魔法書(極道落雷)"},{"n":"高級治癒術","lv":20,"mp":20,"tier":5,"type":"heal","eff":"回復HP 100+(1~100)","rx":"","bk":"魔法書(高級治癒術)"},{"n":"聖潔之光","lv":20,"mp":10,"tier":5,"type":"heal","eff":"回復HP 0","rx":"","bk":"魔法書(聖潔之光)"},{"n":"冰錐","lv":20,"mp":21,"tier":5,"type":"atk","eff":"魔法攻擊","rx":"","bk":"魔法書(冰錐)"},{"n":"魔力奪取","lv":20,"mp":0,"tier":5,"type":"convert","eff":"吸取魔力、轉換","rx":"","bk":"魔法書(魔力奪取)"},{"n":"黑闇之影","lv":20,"mp":25,"tier":5,"type":"atk","eff":"魔法攻擊、附加：致盲（20秒）","rx":"","bk":"魔法書(黑闇之影)"},{"n":"造屍術","lv":24,"mp":35,"tier":6,"type":"buff","eff":"召喚生物","rx":"","bk":"魔法書(造屍術)"},{"n":"加速術","lv":24,"mp":40,"tier":6,"type":"buff","eff":"攻速加成","rx":"","bk":"魔法書(加速術)"},{"n":"魔法相消術","lv":24,"mp":40,"tier":6,"type":"heal","eff":"回復HP 0","rx":"","bk":"魔法書(魔法相消術)"},{"n":"地裂術","lv":24,"mp":25,"tier":6,"type":"atk","eff":"魔法攻擊","rx":"","bk":"魔法書(地裂術)"},{"n":"烈炎術","lv":24,"mp":30,"tier":6,"type":"atk","eff":"魔法攻擊","rx":"","bk":"魔法書(烈炎術)"},{"n":"體魄強健術","lv":24,"mp":50,"tier":6,"type":"buff","eff":"力+5","rx":"","bk":"魔法書(體魄強健術)"},{"n":"祝福魔法武器","lv":24,"mp":20,"tier":6,"type":"buff","eff":"額外傷害+2、額外命中+2","rx":"","bk":"魔法書(祝福魔法武器)"},{"n":"弱化術","lv":24,"mp":25,"tier":6,"type":"atk","eff":"魔法攻擊、附加：虛弱（30秒）","rx":"","bk":"魔法書(弱化術)"},{"n":"體力回復術","lv":28,"mp":35,"tier":7,"type":"heal","eff":"回復HP 30+(1~30)、自動施放","rx":"","bk":"魔法書(體力回復術)"},{"n":"強力加速術","lv":28,"mp":60,"tier":7,"type":"buff","eff":"攻速加成","rx":"","bk":"魔法書(強力加速術)"},{"n":"冰矛圍籬","lv":28,"mp":30,"tier":7,"type":"atk","eff":"魔法攻擊","rx":"","bk":"魔法書(冰矛圍籬)"},{"n":"龍捲風","lv":28,"mp":45,"tier":7,"type":"atk","eff":"魔法攻擊","rx":"","bk":"魔法書(龍捲風)"},{"n":"狂暴術","lv":28,"mp":40,"tier":7,"type":"buff","eff":"近距離傷害+5、AC-10","rx":"","bk":"魔法書(狂暴術)"},{"n":"召喚術","lv":28,"mp":50,"tier":7,"type":"buff","eff":"召喚生物","rx":"","bk":"魔法書(召喚術)"},{"n":"神聖疾走","lv":28,"mp":20,"tier":7,"type":"buff","eff":"ER迴避+15","rx":"","bk":"魔法書(神聖疾走)"},{"n":"疾病術","lv":28,"mp":30,"tier":7,"type":"atk","eff":"魔法攻擊、附加：疾病（30秒）","rx":"","bk":"魔法書(疾病術)"},{"n":"全部治癒術","lv":32,"mp":30,"tier":8,"type":"heal","eff":"回復HP 150+(3~50)","rx":"","bk":"魔法書(全部治癒術)"},{"n":"冰雪暴","lv":32,"mp":60,"tier":8,"type":"atk","eff":"魔法攻擊","rx":"","bk":"魔法書(冰雪暴)"},{"n":"震裂術","lv":32,"mp":40,"tier":8,"type":"atk","eff":"魔法攻擊","rx":"","bk":"魔法書(震裂術)"},{"n":"隱身術","lv":32,"mp":45,"tier":8,"type":"buff","eff":"","rx":"","bk":"魔法書(隱身術)"},{"n":"返生術","lv":32,"mp":50,"tier":8,"type":"passive","eff":"被動效果","rx":"","bk":"魔法書(返生術)"},{"n":"魔法封印","lv":32,"mp":30,"tier":8,"type":"atk","eff":"魔法攻擊、附加：真空吸引（16秒）","rx":"","bk":"魔法書(魔法封印)"},{"n":"聖結界","lv":36,"mp":30,"tier":9,"type":"buff","eff":"一道神聖的防禦屏障保護著你。","rx":"","bk":"魔法書(聖結界)"},{"n":"沉睡之霧","lv":36,"mp":40,"tier":9,"type":"atk","eff":"魔法攻擊、附加：沉睡（8秒）","rx":"","bk":"魔法書(沉睡之霧)"},{"n":"雷霆風暴","lv":36,"mp":48,"tier":9,"type":"atk","eff":"魔法攻擊","rx":"","bk":"魔法書(雷霆風暴)"},{"n":"火風暴","lv":36,"mp":48,"tier":9,"type":"atk","eff":"魔法攻擊","rx":"","bk":"魔法書(火風暴)"},{"n":"流星雨","lv":40,"mp":60,"tier":10,"type":"atk","eff":"魔法攻擊","rx":"","bk":"魔法書(流星雨)"},{"n":"靈魂昇華","lv":40,"mp":20,"tier":10,"type":"buff","eff":"你覺得身體充滿了活力。","rx":"","bk":"魔法書(靈魂昇華)"},{"n":"究極光裂術","lv":40,"mp":70,"tier":10,"type":"atk","eff":"魔法攻擊","rx":"","bk":"魔法書(究極光裂術)"},{"n":"絕對屏障","lv":40,"mp":30,"tier":10,"type":"manual","eff":"短時間完全隔絕傷害（持續7秒）","rx":"","bk":"魔法書(絕對屏障)"},{"n":"火牢","lv":32,"mp":60,"tier":8,"type":"buff","eff":"勾選維持：10秒內每2秒對全體火屬性魔法傷害(共5跳，範圍持續傷害)","rx":"","bk":"魔法書(火牢)"},{"n":"冰雪颶風","lv":40,"mp":60,"tier":10,"type":"buff","eff":"勾選維持：32秒內每4秒對全體水屬性魔法傷害(共8跳)，依(魔命-3)機率冰凍","rx":"","bk":"魔法書(冰雪颶風)"}],"elf":[{"n":"初級治癒術","lv":8,"mp":4,"tier":1,"type":"heal","eff":"回復HP 20+(1~20)","rx":"","bk":"魔法書(初級治癒術)"},{"n":"日光術","lv":8,"mp":4,"tier":1,"type":"buff","eff":"你更容易被怪物發現了。","rx":"","bk":"魔法書(日光術)"},{"n":"保護罩","lv":8,"mp":2,"tier":1,"type":"buff","eff":"AC+2","rx":"","bk":"魔法書(保護罩)"},{"n":"光箭","lv":8,"mp":3,"tier":1,"type":"atk","eff":"魔法攻擊","rx":"","bk":"魔法書(光箭)"},{"n":"傳送術","lv":8,"mp":5,"tier":1,"type":"manual","eff":"","rx":"","bk":"魔法書(指定傳送)"},{"n":"冰箭","lv":8,"mp":3,"tier":1,"type":"atk","eff":"魔法攻擊","rx":"","bk":"魔法書(冰箭)"},{"n":"風刃","lv":8,"mp":3,"tier":1,"type":"atk","eff":"魔法攻擊","rx":"","bk":"魔法書(風刃)"},{"n":"神聖武器","lv":8,"mp":10,"tier":1,"type":"buff","eff":"額外傷害+1、額外命中+1","rx":"","bk":"魔法書(神聖武器)"},{"n":"魔法防禦","lv":10,"mp":10,"tier":1,"type":"buff","eff":"MR+10","rx":"","bk":"精靈水晶(魔法防禦)"},{"n":"心靈轉換","lv":10,"mp":0,"tier":1,"type":"convert","eff":"轉換","rx":"","bk":"精靈水晶(心靈轉換)"},{"n":"世界樹的呼喚","lv":10,"mp":0,"tier":1,"type":"passive","eff":"被動效果","rx":"","bk":"精靈水晶(世界樹的呼喚)"},{"n":"三重矢","lv":10,"mp":15,"tier":1,"type":"atk","eff":"遠程","rx":"需特定武器","bk":"精靈水晶(三重矢)"},{"n":"解毒術","lv":16,"mp":8,"tier":2,"type":"heal","eff":"回復HP 0","rx":"","bk":"魔法書(解毒術)"},{"n":"寒冷戰慄","lv":16,"mp":9,"tier":2,"type":"atk","eff":"魔法攻擊、吸血（造成傷害時回復HP）","rx":"","bk":"魔法書(寒冷戰慄)"},{"n":"毒咒","lv":16,"mp":10,"tier":2,"type":"atk","eff":"魔法攻擊、附加：中毒（15秒）","rx":"","bk":"魔法書(毒咒)"},{"n":"擬似魔法武器","lv":16,"mp":20,"tier":2,"type":"buff","eff":"額外傷害+2","rx":"","bk":"魔法書(擬似魔法武器)"},{"n":"無所遁形術","lv":16,"mp":8,"tier":2,"type":"buff","eff":"","rx":"","bk":"魔法書(無所遁形術)"},{"n":"負重強化","lv":16,"mp":0,"tier":2,"type":"passive","eff":"被動效果","rx":"","bk":"魔法書(負重強化)"},{"n":"火箭","lv":16,"mp":3,"tier":2,"type":"atk","eff":"魔法攻擊","rx":"","bk":"魔法書(火箭)"},{"n":"地獄之牙","lv":16,"mp":3,"tier":2,"type":"atk","eff":"魔法攻擊","rx":"","bk":"魔法書(地獄之牙)"},{"n":"淨化精神","lv":20,"mp":10,"tier":2,"type":"buff","eff":"精神+3","rx":"","bk":"精靈水晶(淨化精神)"},{"n":"屬性防禦","lv":20,"mp":10,"tier":2,"type":"buff","eff":"火屬性抗性+10、水屬性抗性+10、地屬性抗性+10、風屬性抗性+10","rx":"","bk":"精靈水晶(屬性防禦)"},{"n":"釋放元素","lv":20,"mp":30,"tier":2,"type":"atk","eff":"魔法攻擊","rx":"","bk":"精靈水晶(釋放元素)"},{"n":"魂體轉換","lv":20,"mp":0,"tier":2,"type":"convert","eff":"轉換","rx":"","bk":"精靈水晶(魂體轉換)"},{"n":"極光雷電","lv":24,"mp":13,"tier":3,"type":"atk","eff":"魔法攻擊","rx":"","bk":"魔法書(極光雷電)"},{"n":"起死回生術","lv":24,"mp":15,"tier":3,"type":"atk","eff":"魔法攻擊","rx":"","bk":"魔法書(起死回生術)"},{"n":"中級治癒術","lv":24,"mp":11,"tier":3,"type":"heal","eff":"回復HP 50+(1~50)","rx":"","bk":"魔法書(中級治癒術)"},{"n":"闇盲咒術","lv":24,"mp":20,"tier":3,"type":"atk","eff":"魔法攻擊、附加：致盲（10秒）","rx":"","bk":"魔法書(闇盲咒術)"},{"n":"鎧甲護持","lv":24,"mp":20,"tier":3,"type":"buff","eff":"AC+3","rx":"","bk":"魔法書(鎧甲護持)"},{"n":"寒冰氣息","lv":24,"mp":9,"tier":3,"type":"atk","eff":"魔法攻擊","rx":"","bk":"魔法書(寒冰氣息)"},{"n":"能量感測","lv":24,"mp":8,"tier":3,"type":"manual","eff":"","rx":"","bk":"魔法書(能量感測)"},{"n":"燃燒的火球","lv":24,"mp":16,"tier":3,"type":"atk","eff":"魔法攻擊","rx":"","bk":"魔法書(燃燒的火球)"},{"n":"單屬性防禦","lv":30,"mp":10,"tier":3,"type":"buff","eff":"","rx":"需任一屬性","bk":"精靈水晶(單屬性防禦)"},{"n":"火焰武器","lv":30,"mp":20,"tier":3,"type":"buff","eff":"近距離傷害+3","rx":"需火屬性","bk":"精靈水晶(火焰武器)"},{"n":"風之神射","lv":30,"mp":15,"tier":3,"type":"buff","eff":"遠距離命中+5","rx":"需風屬性","bk":"精靈水晶(風之神射)"},{"n":"風之疾走","lv":30,"mp":20,"tier":3,"type":"buff","eff":"ER迴避+10","rx":"需風屬性","bk":"精靈水晶(風之疾走)"},{"n":"大地防護","lv":30,"mp":15,"tier":3,"type":"buff","eff":"AC+4","rx":"需地屬性","bk":"精靈水晶(大地防護)"},{"n":"地面障礙","lv":30,"mp":20,"tier":3,"type":"atk","eff":"魔法攻擊、附加：緩速（30秒）","rx":"需地屬性","bk":"精靈水晶(地面障礙)"},{"n":"通暢氣脈術","lv":32,"mp":45,"tier":4,"type":"buff","eff":"敏+5","rx":"","bk":"魔法書(通暢氣脈術)"},{"n":"壞物術","lv":32,"mp":20,"tier":4,"type":"atk","eff":"魔法攻擊、附加：破壞（25秒）","rx":"","bk":"魔法書(壞物術)"},{"n":"吸血鬼之吻","lv":32,"mp":13,"tier":4,"type":"atk","eff":"魔法攻擊、吸血（造成傷害時回復HP）","rx":"","bk":"魔法書(吸血鬼之吻)"},{"n":"緩速術","lv":32,"mp":20,"tier":4,"type":"atk","eff":"魔法攻擊、附加：緩速（30秒）","rx":"","bk":"魔法書(緩速術)"},{"n":"岩牢","lv":32,"mp":11,"tier":4,"type":"atk","eff":"魔法攻擊","rx":"","bk":"魔法書(岩牢)"},{"n":"魔法屏障","lv":32,"mp":16,"tier":4,"type":"buff","eff":"","rx":"","bk":"魔法書(魔法屏障)"},{"n":"冥想術","lv":32,"mp":10,"tier":4,"type":"buff","eff":"MP回復+5","rx":"","bk":"魔法書(冥想術)"},{"n":"魔法消除","lv":40,"mp":30,"tier":4,"type":"atk","eff":"魔法攻擊、附加：魔抗減半（16秒）","rx":"","bk":"精靈水晶(魔法消除)"},{"n":"召喚屬性精靈","lv":40,"mp":30,"tier":4,"type":"buff","eff":"召喚生物","rx":"需任一屬性","bk":"精靈水晶(召喚屬性精靈)"},{"n":"舞躍之火","lv":40,"mp":30,"tier":4,"type":"buff","eff":"近距離傷害+5","rx":"需火屬性","bk":"精靈水晶(舞躍之火)"},{"n":"大地屏障","lv":40,"mp":50,"tier":4,"type":"buff","eff":"","rx":"需地屬性","bk":"精靈水晶(大地屏障)"},{"n":"生命之泉","lv":40,"mp":50,"tier":4,"type":"heal","eff":"回復HP 250+(5~50)","rx":"需水屬性","bk":"精靈水晶(生命之泉)"},{"n":"大地的祝福","lv":40,"mp":35,"tier":4,"type":"buff","eff":"AC+5","rx":"需地屬性","bk":"精靈水晶(大地的祝福)"},{"n":"木乃伊的詛咒","lv":40,"mp":35,"tier":5,"type":"atk","eff":"魔法攻擊、附加：石化（6秒）","rx":"","bk":"魔法書(木乃伊的詛咒)"},{"n":"迷魅術","lv":40,"mp":30,"tier":5,"type":"manual","eff":"","rx":"","bk":"魔法書(迷魅術)"},{"n":"極道落雷","lv":40,"mp":25,"tier":5,"type":"atk","eff":"魔法攻擊","rx":"","bk":"魔法書(極道落雷)"},{"n":"高級治癒術","lv":40,"mp":20,"tier":5,"type":"heal","eff":"回復HP 100+(1~100)","rx":"","bk":"魔法書(高級治癒術)"},{"n":"聖潔之光","lv":40,"mp":10,"tier":5,"type":"heal","eff":"回復HP 0","rx":"","bk":"魔法書(聖潔之光)"},{"n":"冰錐","lv":40,"mp":21,"tier":5,"type":"atk","eff":"魔法攻擊","rx":"","bk":"魔法書(冰錐)"},{"n":"魔力奪取","lv":40,"mp":0,"tier":5,"type":"convert","eff":"吸取魔力、轉換","rx":"","bk":"魔法書(魔力奪取)"},{"n":"黑闇之影","lv":40,"mp":25,"tier":5,"type":"atk","eff":"魔法攻擊、附加：致盲（20秒）","rx":"","bk":"魔法書(黑闇之影)"},{"n":"造屍術","lv":48,"mp":35,"tier":6,"type":"buff","eff":"召喚生物","rx":"","bk":"魔法書(造屍術)"},{"n":"加速術","lv":48,"mp":40,"tier":6,"type":"buff","eff":"攻速加成","rx":"","bk":"魔法書(加速術)"},{"n":"魔法相消術","lv":48,"mp":40,"tier":6,"type":"heal","eff":"回復HP 0","rx":"","bk":"魔法書(魔法相消術)"},{"n":"地裂術","lv":48,"mp":25,"tier":6,"type":"atk","eff":"魔法攻擊","rx":"","bk":"魔法書(地裂術)"},{"n":"烈炎術","lv":48,"mp":30,"tier":6,"type":"atk","eff":"魔法攻擊","rx":"","bk":"魔法書(烈炎術)"},{"n":"體魄強健術","lv":48,"mp":50,"tier":6,"type":"buff","eff":"力+5","rx":"","bk":"魔法書(體魄強健術)"},{"n":"祝福魔法武器","lv":48,"mp":20,"tier":6,"type":"buff","eff":"額外傷害+2、額外命中+2","rx":"","bk":"魔法書(祝福魔法武器)"},{"n":"弱化術","lv":48,"mp":25,"tier":6,"type":"atk","eff":"魔法攻擊、附加：虛弱（30秒）","rx":"","bk":"魔法書(弱化術)"},{"n":"召喚強力屬性精靈","lv":50,"mp":50,"tier":5,"type":"buff","eff":"召喚生物","rx":"需任一屬性","bk":"精靈水晶(召喚強力屬性精靈)"},{"n":"生命的祝福","lv":50,"mp":30,"tier":5,"type":"heal","eff":"回復HP 28+(1~28)、自動施放","rx":"需水屬性","bk":"精靈水晶(生命的祝福)"},{"n":"封印禁地","lv":50,"mp":40,"tier":5,"type":"atk","eff":"魔法攻擊、附加：魔法封印（8秒）","rx":"需任一屬性","bk":"精靈水晶(封印禁地)"},{"n":"烈炎武器","lv":50,"mp":30,"tier":5,"type":"buff","eff":"近距離傷害+5、近距離命中+5","rx":"需火屬性","bk":"精靈水晶(烈炎武器)"},{"n":"鋼鐵防護","lv":50,"mp":30,"tier":5,"type":"buff","eff":"AC+7","rx":"需地屬性","bk":"精靈水晶(鋼鐵防護)"},{"n":"烈焰之魂","lv":50,"mp":30,"tier":5,"type":"buff","eff":"近距離一般攻擊武器擲骰必為最大值（持續128秒，效果結束後才能再施放）","rx":"需火屬性","bk":"精靈水晶(烈焰之魂)"},{"n":"鏡反射","lv":50,"mp":10,"tier":5,"type":"buff","eff":"周身浮現鏡面，反彈攻擊（持續16秒）","rx":"需風屬性","bk":"精靈水晶(鏡反射)"},{"n":"屬性之火","lv":50,"mp":20,"tier":5,"type":"buff","eff":"持續320秒，一般攻擊30%機率造成1.5倍傷害","rx":"需火屬性","bk":"精靈水晶(屬性之火)"},{"n":"能量激發","lv":50,"mp":30,"tier":5,"type":"buff","eff":"持續960秒，負重狀態下仍可自然恢復HP/MP","rx":"需火屬性","bk":"精靈水晶(能量激發)"},{"n":"體能激發","lv":50,"mp":30,"tier":5,"type":"buff","eff":"持續960秒，負重狀態下仍可自然恢復HP/MP","rx":"需地屬性","bk":"精靈水晶(體能激發)"},{"n":"水之元氣","lv":30,"mp":1,"tier":3,"type":"buff","eff":"持續64秒的水屬性增益","rx":"需水屬性","bk":"精靈水晶(水之元氣)"},{"n":"暴風神射","lv":50,"mp":30,"tier":5,"type":"buff","eff":"持續1200秒：遠距離傷害+6、遠距離命中+3","rx":"需風屬性","bk":"精靈水晶(暴風神射)"},{"n":"暴風之眼","lv":40,"mp":40,"tier":4,"type":"buff","eff":"持續1200秒：遠距離傷害+2、遠距離命中+2","rx":"需風屬性","bk":"精靈水晶(暴風之眼)"},{"n":"精準射擊","lv":50,"mp":15,"tier":5,"type":"buff","eff":"持續64秒：一般攻擊最高命中率提升至100%（結束才再施放）","rx":"需風屬性","bk":"精靈水晶(精準射擊)"}],"dark":[{"n":"力量提升","lv":15,"mp":10,"tier":1,"type":"buff","eff":"力+3","rx":"","bk":"黑暗精靈水晶(力量提升)"},{"n":"影之防護","lv":15,"mp":12,"tier":1,"type":"buff","eff":"MR+5","rx":"","bk":"黑暗精靈水晶(影之防護)"},{"n":"暗隱術","lv":15,"mp":10,"tier":1,"type":"buff","eff":"ER迴避+100、觸發迴避後解除並冷卻5秒（物理版魔法屏障）","rx":"","bk":"黑暗精靈水晶(暗隱術)"},{"n":"附加劇毒","lv":15,"mp":10,"tier":1,"type":"buff","eff":"武器附加劇毒","rx":"","bk":"黑暗精靈水晶(附加劇毒)"},{"n":"提煉魔石","lv":15,"mp":0,"tier":1,"type":"passive","eff":"被動效果","rx":"","bk":"黑暗精靈水晶(提煉魔石)"},{"n":"負重強化","lv":16,"mp":0,"tier":2,"type":"passive","eff":"被動效果","rx":"","bk":"魔法書(負重強化)"},{"n":"敏捷提升","lv":30,"mp":10,"tier":2,"type":"buff","eff":"敏+3","rx":"","bk":"黑暗精靈水晶(敏捷提升)"},{"n":"毒性抵抗","lv":30,"mp":20,"tier":2,"type":"buff","eff":"毒性抵抗","rx":"","bk":"黑暗精靈水晶(毒性抵抗)"},{"n":"燃燒鬥志","lv":30,"mp":20,"tier":2,"type":"buff","eff":"戰意燃燒（鬥志強化）","rx":"","bk":"黑暗精靈水晶(燃燒鬥志)"},{"n":"行走加速","lv":30,"mp":10,"tier":2,"type":"buff","eff":"行走加速（攻速+15%，可與加速術疊加）","rx":"","bk":"黑暗精靈水晶(行走加速)"},{"n":"暗影之牙","lv":45,"mp":20,"tier":3,"type":"buff","eff":"額外傷害+5","rx":"","bk":"黑暗精靈水晶(暗影之牙)"},{"n":"暗影閃避","lv":45,"mp":20,"tier":3,"type":"buff","eff":"迴避時亦可閃避魔法攻擊","rx":"","bk":"黑暗精靈水晶(暗影閃避)"},{"n":"會心一擊","lv":45,"mp":0,"tier":3,"type":"atk","eff":"爆擊強化","rx":"","bk":"黑暗精靈水晶(會心一擊)"},{"n":"迴避提升","lv":45,"mp":20,"tier":3,"type":"buff","eff":"ER迴避+12","rx":"","bk":"黑暗精靈水晶(迴避提升)"},{"n":"雙重破壞","lv":45,"mp":20,"tier":3,"type":"buff","eff":"雙重攻擊（攻擊可追加一次命中）","rx":"","bk":"黑暗精靈水晶(雙重破壞)"},{"n":"破壞盔甲","lv":45,"mp":32,"tier":3,"type":"atk","eff":"魔法攻擊、附加：破壞盔甲（降低目標防禦，使其受到傷害提高）（8秒）","rx":"","bk":"黑暗精靈水晶(破壞盔甲)"}],"illusion":[{"n":"幻覺：歐吉","lv":10,"mp":20,"tier":1,"type":"buff","eff":"額外傷害+4、額外命中+4、召喚幻象(歐吉)","rx":"","bk":"記憶水晶(幻覺：歐吉)"},{"n":"混亂","lv":10,"mp":15,"tier":1,"type":"atk","eff":"魔法攻擊、附加：混亂(8秒)","rx":"耗HP10","bk":"記憶水晶(混亂)"},{"n":"立方：燃燒","lv":10,"mp":30,"tier":1,"type":"buff","eff":"火屬性抗性+30","rx":"","bk":"記憶水晶(立方：燃燒)"},{"n":"粉碎能量","lv":10,"mp":5,"tier":1,"type":"atk","eff":"魔法攻擊","rx":"","bk":"記憶水晶(粉碎能量)"},{"n":"鏡像","lv":10,"mp":10,"tier":1,"type":"buff","eff":"ER迴避+25","rx":"","bk":"記憶水晶(鏡像)"},{"n":"專注","lv":20,"mp":30,"tier":2,"type":"buff","eff":"MP自然恢復+4","rx":"","bk":"記憶水晶(專注)"},{"n":"幻覺：巫妖","lv":20,"mp":20,"tier":2,"type":"buff","eff":"魔法傷害+2、召喚幻象(巫妖)","rx":"","bk":"記憶水晶(幻覺：巫妖)"},{"n":"心靈破壞","lv":20,"mp":0,"tier":2,"type":"atk","eff":"魔法攻擊","rx":"","bk":"記憶水晶(心靈破壞)"},{"n":"立方：地裂","lv":20,"mp":35,"tier":2,"type":"buff","eff":"地屬性抗性+30","rx":"","bk":"記憶水晶(立方：地裂)"},{"n":"骷髏毀壞","lv":20,"mp":30,"tier":2,"type":"atk","eff":"魔法攻擊、附加：暈眩(6秒)","rx":"","bk":"記憶水晶(骷髏毀壞)"},{"n":"幻想","lv":30,"mp":30,"tier":3,"type":"atk","eff":"魔法攻擊、附加：沉睡(8秒)","rx":"耗HP25","bk":"記憶水晶(幻想)"},{"n":"幻覺：鑽石高崙","lv":30,"mp":30,"tier":3,"type":"buff","eff":"AC+10、召喚幻象(鑽石高崙)","rx":"耗HP25","bk":"記憶水晶(幻覺：鑽石高崙)"},{"n":"立方：衝擊","lv":30,"mp":55,"tier":3,"type":"buff","eff":"風屬性抗性+30","rx":"","bk":"記憶水晶(立方：衝擊)"},{"n":"耐力","lv":30,"mp":25,"tier":3,"type":"buff","eff":"傷害減免+2","rx":"","bk":"記憶水晶(耐力)"},{"n":"幻覺：化身","lv":40,"mp":50,"tier":4,"type":"buff","eff":"額外傷害+10","rx":"","bk":"記憶水晶(幻覺：化身)"},{"n":"恐慌","lv":40,"mp":30,"tier":4,"type":"atk","eff":"魔法攻擊、附加：恐慌(64秒)","rx":"耗HP30","bk":"記憶水晶(恐慌)"},{"n":"洞察","lv":40,"mp":60,"tier":4,"type":"buff","eff":"力量+1、敏捷+1、體質+1、智力+1、精神+1","rx":"","bk":"記憶水晶(洞察)"},{"n":"立方：和諧","lv":40,"mp":0,"tier":4,"type":"buff","eff":"（增益）","rx":"耗HP25","bk":"記憶水晶(立方：和諧)"},{"n":"疼痛的歡愉","lv":40,"mp":0,"tier":4,"type":"buff","eff":"（增益）","rx":"耗HP40","bk":"記憶水晶(疼痛的歡愉)"}],"dragon":[{"n":"龍之護鎧","lv":15,"mp":0,"tier":1,"type":"buff","eff":"傷害減免+5","rx":"耗HP12、不可刷新","bk":"龍騎士書板(龍之護鎧)"},{"n":"燃燒擊砍","lv":15,"mp":0,"tier":1,"type":"buff","eff":"下一擊燃燒","rx":"需近戰武器、耗HP6、不可刷新","bk":"龍騎士書板(燃燒擊砍)"},{"n":"護衛毀滅","lv":15,"mp":0,"tier":1,"type":"atk","eff":"魔法攻擊","rx":"耗HP20","bk":"龍騎士書板(護衛毀滅)"},{"n":"岩漿噴吐","lv":15,"mp":0,"tier":1,"type":"atk","eff":"魔法攻擊","rx":"耗HP10","bk":"龍騎士書板(岩漿噴吐)"},{"n":"覺醒：安塔瑞斯","lv":15,"mp":20,"tier":1,"type":"buff","eff":"AC+8、覺醒","rx":"耗HP10、不可刷新","bk":"龍騎士書板(覺醒：安塔瑞斯)"},{"n":"血之渴望","lv":30,"mp":0,"tier":2,"type":"buff","eff":"嗜血加速","rx":"耗HP30、不可刷新","bk":"龍騎士書板(血之渴望)"},{"n":"屠宰者","lv":30,"mp":0,"tier":2,"type":"atk","eff":"魔法攻擊","rx":"耗HP16","bk":"龍騎士書板(屠宰者)"},{"n":"恐懼無助","lv":30,"mp":0,"tier":2,"type":"atk","eff":"魔法攻擊","rx":"耗HP12","bk":"龍騎士書板(恐懼無助)"},{"n":"岩漿之箭","lv":30,"mp":0,"tier":2,"type":"atk","eff":"魔法攻擊","rx":"耗HP16","bk":"龍騎士書板(岩漿之箭)"},{"n":"覺醒：法利昂","lv":30,"mp":30,"tier":2,"type":"buff","eff":"火屬性抗性+15、水屬性抗性+15、地屬性抗性+15、風屬性抗性+15、覺醒","rx":"耗HP20、不可刷新","bk":"龍騎士書板(覺醒：法利昂)"},{"n":"致命身軀","lv":45,"mp":0,"tier":3,"type":"buff","eff":"反擊化刃","rx":"耗HP50、不可刷新","bk":"龍騎士書板(致命身軀)"},{"n":"奪命之雷","lv":45,"mp":0,"tier":3,"type":"atk","eff":"魔法攻擊、附加：暈眩(6秒)","rx":"耗HP35","bk":"龍騎士書板(奪命之雷)"},{"n":"驚悚死神","lv":45,"mp":0,"tier":3,"type":"atk","eff":"魔法攻擊","rx":"耗HP20","bk":"龍騎士書板(驚悚死神)"},{"n":"覺醒：巴拉卡斯","lv":45,"mp":50,"tier":3,"type":"buff","eff":"力量+3、體質+3、敏捷+3、智力+3、精神+3、額外命中+5、覺醒","rx":"耗HP30、不可刷新","bk":"龍騎士書板(覺醒：巴拉卡斯)"}],"warrior":[{"n":"迅猛雙斧","lv":15,"mp":0,"tier":1,"type":"passive","eff":"裝備單手鈍器時副手也可裝單手鈍器，一般攻擊同時判定兩個攻擊來源。","grp":"熱血","bk":"戰士的印記(迅猛雙斧)"},{"n":"戰斧投擲","lv":15,"mp":5,"tier":1,"type":"atk","eff":"須裝備單手鈍器或雙手鈍器；下一次一般攻擊附加出血。持續6秒。","grp":"憤怒","bk":"戰士的印記(戰斧投擲)"},{"n":"咆哮","lv":30,"mp":5,"tier":2,"type":"atk","eff":"對所有敵人造成 50+(等級-30) 的固定傷害。","grp":"憤怒","bk":"戰士的印記(咆哮)"},{"n":"粉碎","lv":30,"mp":0,"tier":2,"type":"passive","eff":"近距離傷害+2，玩家等級45時額外+1，之後每升一級+1。","grp":"熱血","bk":"戰士的印記(粉碎)"},{"n":"護甲身軀","lv":45,"mp":0,"tier":3,"type":"passive","eff":"傷害減免 +[(10-AC)/10]。","grp":"熱血","bk":"戰士的印記(護甲身軀)"},{"n":"狂暴","lv":50,"mp":0,"tier":4,"type":"passive","eff":"一般攻擊5%機率傷害x2。","grp":"熱血","bk":"戰士的印記(狂暴)"},{"n":"泰坦：岩石","lv":50,"mp":0,"tier":4,"type":"passive","eff":"HP低於40%時，受到一般攻擊對攻擊目標造成相同傷害。","grp":"忍耐","bk":"戰士的印記(泰坦：岩石)"},{"n":"泰坦：魔法","lv":50,"mp":0,"tier":4,"type":"passive","eff":"HP低於40%時，受到技能攻擊對攻擊目標造成相同傷害。","grp":"忍耐","bk":"戰士的印記(泰坦：魔法)"},{"n":"體能強化","lv":50,"mp":10,"tier":4,"type":"buff","eff":"HP上限增加+(等級/2)%。持續300秒。","grp":"憤怒","bk":"戰士的印記(體能強化)"},{"n":"泰坦：子彈","lv":60,"mp":0,"tier":5,"type":"passive","eff":"HP低於40%時，ER+50。","grp":"忍耐","bk":"戰士的印記(泰坦：子彈)"},{"n":"亡命之徒","lv":60,"mp":10,"tier":5,"type":"atk","eff":"一般攻擊最低命中率變成50%。持續6秒。","grp":"憤怒","bk":"戰士的印記(亡命之徒)"}],"royal":[{"n":"精準目標","lv":15,"mp":2,"tier":1,"type":"buff","eff":"場上所有敵人受到的傷害增加 [1+(玩家等級/15)]%，持續 16 秒（結束才再施放）。","grp":"一階王族魔法","bk":"魔法書(精準目標)"},{"n":"呼喚盟友","lv":30,"mp":30,"tier":2,"type":"atk","eff":"所有傭兵立即發動一次額外攻擊。","grp":"二階王族魔法","bk":"魔法書(呼喚盟友)"},{"n":"灼熱武器","lv":40,"mp":25,"tier":3,"type":"buff","eff":"額外傷害+5、額外命中+5，持續 640 秒（結束才再施放）。","grp":"特殊級王族魔法","bk":"魔法書(灼熱武器)"},{"n":"勇猛意志","lv":50,"mp":25,"tier":4,"type":"atk","eff":"10%機率一般攻擊傷害 ×1.5，持續 640 秒（結束才再施放）。","grp":"特殊級王族魔法","bk":"魔法書(勇猛意志)"},{"n":"閃亮之盾","lv":50,"mp":25,"tier":4,"type":"buff","eff":"AC-8，持續 640 秒（結束才再施放）。","grp":"特殊級王族魔法","bk":"魔法書(閃亮之盾)"},{"n":"王者加護","lv":50,"mp":0,"tier":4,"type":"passive","eff":"MR+10、20%機率抵抗暈眩。","grp":"特殊級王族魔法","bk":"魔法書(王者加護)"}]};
+window.SETS_TAB = [{"n":"皮套裝","items":["皮帽子","皮涼鞋","皮盾牌","皮背心"],"bonus":"AC+3"},{"n":"歐西斯套裝","items":["歐西斯頭盔","歐西斯環甲","歐西斯斗篷","阿克海盾牌"],"bonus":"AC+3"},{"n":"侏儒套裝","items":["侏儒鐵盔","侏儒斗篷","侏儒圓盾"],"bonus":"AC+1、HP+5"},{"n":"銀釘套裝","items":["銀釘皮帽","銀釘皮涼鞋","銀釘皮盾","銀釘皮背心"],"bonus":"AC+3"},{"n":"骷髏套裝","items":["骷髏頭盔","骷髏盾牌","骷髏盔甲"],"bonus":"AC+2、HP+10"},{"n":"鋼鐵套裝","items":["鋼鐵手套","鋼鐵頭盔","鋼鐵盾牌","鋼鐵長靴","鋼鐵金屬盔甲"],"bonus":"AC+3"},{"n":"法師套裝","items":["法師之帽","法師長袍"],"bonus":"MP+50"},{"n":"死亡騎士套裝","items":["死亡騎士手套","死亡騎士盔甲","死亡騎士長靴","死亡騎士頭盔"],"bonus":"AC+4、4件集齊變身「真‧死亡騎士」(額外傷害+6、額外命中+6、攻速+35%，可與加速/勇敢/餅乾疊加)"},{"n":"克特套裝","items":["克特手套","克特盔甲","克特長靴","克特頭盔"],"bonus":"AC+4、4件集齊變身「真‧克特」(額外傷害+4、額外命中+8、攻速+35%，可與加速/勇敢/餅乾疊加)"},{"n":"抗魔套裝","items":["抗魔戒指","抗魔項鍊","抗魔皮帶"],"bonus":"MR+5"},{"n":"守護套裝","items":["守護戒指","守護項鍊","守護皮帶"],"bonus":"AC+1"},{"n":"四大軍王套裝","items":["冥法軍王斗篷","法令軍王長袍","暗殺軍王手套","魔獸軍王長靴"],"bonus":"HP+30、MP+30、HP自然恢復+10、MP自然恢復+10、魅力+3"},{"n":"惡魔套裝","items":["惡魔頭盔","惡魔盔甲","惡魔手套","惡魔長靴"],"bonus":"AC-2、HP自然恢復+5、變身「惡魔」(額外傷害+4、額外命中+4、魔法傷害+3、額外MP+3、MP自然恢復+3、攻速+33%，可與加速/勇敢/餅乾疊加)"},{"n":"黑暗妖精套裝","items":["黑暗妖精頭箍","黑暗妖精鱗甲","黑暗妖精涼鞋"],"bonus":"3件集齊：AC-3、HP自然恢復-2、MP自然恢復-7、力量-2、敏捷+2，變身「高等黑暗精靈」(遠距離傷害+5、遠距離命中+5、攻速+30%，可與加速/勇水/妖精餅乾疊加)"},{"n":"歐林套裝","items":["歐林的項鍊","西瑪戒指"],"bonus":"AC-5、HP+50、力量/敏捷/體質/智力/精神/魅力 各+1"},{"n":"冰之女王魅力套裝","items":["冰之女王魅力頭飾","冰之女王魅力禮服","冰之女王魅力涼鞋"],"bonus":"（公主限定）AC-5、力量+2、魅力+2、HP+100、MP自然恢復+4、水屬性抗性+20"},{"n":"寒冰套裝","items":["寒冰頭盔","寒冰盔甲","寒冰長靴"],"bonus":"AC-5、體質+3、HP+100、HP自然恢復+8、MP自然恢復+4、MR+15、水屬性抗性+20"}];
+        // ITEMS_DB 已移除→改由 db.js 動態建構
+// 魔物資料區
+        // MOB_STATS 已移除→改由 db.js 動態建構
+// 地圖出怪區
+        // MOB_ZONES 已移除→改由 db.js 動態建構
+// 魔物物品掉落資料區
+        // MOB_DROPS 已移除→改由 db.js 動態建構
+</script>
+<!-- B計畫：外部遊戲資料（遊戲 F12 匯出 window.GAME_DB）·必須與本檔同資料夾 -->
+<script src="./db.js"></script>
+<script>
+        // ===== B計畫（db.js 版·方案X）：外部 window.GAME_DB 同步載入 =====
+        // db.js（遊戲 F12 匯出，內容為 window.GAME_DB={...}）以 <script src> 載入。
+        // <script src> 不受 CORS 限制 → file:// 雙擊與 http 線上皆可讀。方案X：必須有 db.js，無內嵌備援。
+        const _DB_SOURCE = { ok: false, version: '' };
+        const _stripDice = s => (typeof s === 'string' ? s.replace(/\d+[dD]\d+/g, '') : s);
+        const _ORE_RATES = { '石頭高崙':100, '鋼鐵高崙':100, '侏儒':50, '侏儒戰士':50, '黑騎士':50, '哈柏哥布林':50, '蜥蜴人':50 };
+        // 3 個 legacy 無來源物（不在 db.js·工具歷史保留·寫死）
+        const _LEGACY = {"arm_52":{"n":"騎士頭巾","type":"arm","slot":"helm","ac":1,"req":"knight","p":1,"gachaWeight":0},"arm_58":{"n":"淨化頭飾","type":"arm","slot":"helm","ac":0,"req":"elf","p":1,"gachaWeight":0},"arm_114":{"n":"受詛咒的魔法書","type":"arm","slot":"shield","ac":1,"req":"mage","p":1,"gachaWeight":0,"block":10}};
+
+        (function _initGameDB(){
+            const dump = window.GAME_DB;
+            if (!dump || !dump.items || !dump.drops){
+                window.ITEMS_DB = {}; window.MOB_DROPS = {}; window.MOB_STATS = {}; window.MOB_ZONES = {};
+                console.error('[B計畫] 找不到 db.js（window.GAME_DB 未定義）→ 請確認 db.js 與本檔在同一資料夾');
+                return;
+            }
+            // 物品：dump.items 原樣 + stripDice(d) + 保留 3 legacy
+            const items = {};
+            for (const id in dump.items){ const o = Object.assign({}, dump.items[id]); if (o.d) o.d = _stripDice(o.d); items[id] = o; }
+            for (const id in _LEGACY){ if (!items[id]) items[id] = _LEGACY[id]; }
+            window.ITEMS_DB = items;
+            // 掉落：合併 6 表（MOB_DROPS 已含遺物掉落）+ 銀礦石 + 去重
+            const tabs = ['MOB_DROPS','DARK_WEAPON_DROPS','DRAGON_DROPS','WARRIOR_DROPS','MEM_DROPS','DARK_CRYSTAL_DROPS'];
+            const drops = {};
+            tabs.forEach(t => { const tb = dump.drops[t]; if (!tb) return; for (const m in tb){ (drops[m] = drops[m] || []); tb[m].forEach(x => drops[m].push([x[0], x[1]])); } });
+            for (const m in _ORE_RATES){ (drops[m] = drops[m] || []); if (!drops[m].some(x => x[0] === 'mat_silverore')) drops[m].push(['mat_silverore', _ORE_RATES[m]]); }
+            for (const m in drops){ const seen = new Set(); drops[m] = drops[m].filter(x => seen.has(x[0]) ? false : (seen.add(x[0]), true)); }
+            window.MOB_DROPS = drops;
+            window.MOB_STATS = dump.mobs || {};
+            window.MOB_ZONES = dump.maps || {};
+            _DB_SOURCE.ok = true;
+            _DB_SOURCE.version = (dump.gameVersion && dump.gameVersion !== 'unknown') ? dump.gameVersion : '';
+            console.log('[B計畫] db.js 載入成功 · 物品', Object.keys(items).length, '· 版本', _DB_SOURCE.version || '(未帶出)');
+        })();
+
+        // 安全獨立變數初始化（此時 window.* 已由 db.js 建好）
+        const dItems = window.ITEMS_DB || {};
+        const dDrops = window.MOB_DROPS || {};
+        const dMobs = window.MOB_STATS || {};
+        const dZones = window.MOB_ZONES || {};
+
+        function _renderDbSourceBadge(){
+            let el = document.getElementById('dbSourceBadge');
+            if (!el){ el = document.createElement('div'); el.id = 'dbSourceBadge'; el.style.cssText = 'position:fixed;right:10px;bottom:10px;z-index:9999;font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid;background:rgba(15,23,42,0.9);'; document.body.appendChild(el); }
+            if (_DB_SOURCE.ok){ el.style.color = '#4ade80'; el.style.borderColor = '#4ade80'; el.textContent = '🟢 資料來源：db.js' + (_DB_SOURCE.version ? ' ' + _DB_SOURCE.version : ''); }
+            else { el.style.color = '#f87171'; el.style.borderColor = '#f87171'; el.textContent = '🔴 找不到 db.js（請確認 db.js 與本檔同資料夾）'; }
+        }
+
+        // 地圖代碼中文化對照表
+        window.ITEM_SRC = {
+            "mat_crack_core": "c",
+            "item_osiris_box_basic": "c",
+            "item_osiris_box_high": "c",
+            "wpn_qigu_obsidian": "c",
+            "item_pride_dom_11": "c",
+            "item_pride_dom_21": "c",
+            "item_pride_dom_31": "c",
+            "item_pride_dom_41": "c",
+            "item_pride_dom_51": "c",
+            "item_pride_dom_61": "c",
+            "item_pride_dom_71": "c",
+            "item_pride_dom_81": "c",
+            "item_pride_dom_91": "c",
+            "pet_fang_hound": "c",
+            "pet_fang_steel": "c",
+            "pet_fang_ruin": "c",
+            "pet_fang_victory": "c",
+            "clk_flame_blood": "c",
+            "wpn_demon_sword": "c",
+            "wpn_demon_claw": "c",
+            "wpn_demon_dual": "c",
+            "wpn_demon_xbow": "c",
+            "mat_silver_plate": "c",
+            "mat_blackmithril_plate": "c",
+            "item_shadow_temple_key": "c",
+            "mat_cursed_leather_earth": "c",
+            "mat_cursed_leather_water": "c",
+            "mat_cursed_leather_wind": "c",
+            "mat_cursed_leather_fire": "c",
+            "clk_pride_earth": "c",
+            "clk_pride_water": "c",
+            "clk_pride_wind": "c",
+            "clk_pride_fire": "c",
+            "panacea_str": "c",
+            "panacea_dex": "c",
+            "panacea_int": "c",
+            "panacea_con": "c",
+            "panacea_wis": "c",
+            "panacea_cha": "c",
+            "arm_48": "c",
+            "arm_111": "c",
+            "arm_91": "c",
+            "arm_75": "c",
+            "arm_49": "c",
+            "arm_78": "c",
+            "new_item_181": "c",
+            "arm_76": "c",
+            "arm_93": "c",
+            "new_item_182": "c",
+            "wpn_40": "c",
+            "wpn_41": "c",
+            "wpn_34": "c",
+            "wpn_35": "c",
+            "wpn_36": "c",
+            "hlm_silver": "c",
+            "arm_112": "c",
+            "arm_92": "c",
+            "arm_77": "c",
+            "shd_bone": "c",
+            "amr_bone": "c",
+            "hlm_bone": "c",
+            "new_item_176": "c",
+            "new_item_168": "c",
+            "new_item_174": "c",
+            "new_item_171": "c",
+            "new_item_175": "c",
+            "wpn_15": "cs",
+            "arm_70": "c",
+            "arm_74": "c",
+            "arm_109": "c",
+            "wpn_rapier": "c",
+            "wpn_mailbreaker": "c",
+            "wpn_10": "cs",
+            "wpn_30": "c",
+            "arm_90": "c",
+            "arm_44": "c",
+            "hlm_elf": "c",
+            "wpn_elfsword": "c",
+            "wpn_dagger2": "c",
+            "clk_elf": "c",
+            "shd_elf": "c",
+            "arm_73": "c",
+            "wpn_24": "c",
+            "arm_72": "c",
+            "wpn_elfbow": "c",
+            "arm_71": "c",
+            "wpn_29": "c",
+            "wpn_battleaxe": "cs",
+            "bot_short": "c",
+            "wpn_31": "c",
+            "arm_99": "c",
+            "wpn_halberd": "cs",
+            "wpn_5": "cs",
+            "wpn_3": "cs",
+            "arm_98": "c",
+            "new_item_173": "c",
+            "wpn_shaha_bow": "c",
+            "new_item_169": "c",
+            "new_item_170": "c",
+            "new_item_elfwing": "c",
+            "new_item_172": "c",
+            "new_item_177": "c",
+            "new_item_178": "c",
+            "wpn_39": "c",
+            "wpn_flaming_angel": "c",
+            "mat_silver": "c",
+            "wpn_claw_dark": "c",
+            "wpn_claw_silver": "c",
+            "wpn_claw_gloom": "c",
+            "wpn_dual_dark": "c",
+            "wpn_dual_silver": "c",
+            "wpn_dual_gloom": "c",
+            "wpn_xbow_dark": "c",
+            "wpn_xbow_gloom": "c",
+            "hlm_mage": "c",
+            "amr_magerobe": "c",
+            "hlm_steel": "c",
+            "arm_113": "c",
+            "arm_94": "c",
+            "arm_100": "c",
+            "arm_79": "c",
+            "hlm_frost": "c",
+            "amr_frost": "c",
+            "bot_frost": "c",
+            "clk_mr": "c",
+            "arm_87": "c",
+            "tsh_tshirt": "c",
+            "acc_135": "c",
+            "acc_137": "c",
+            "acc_136": "c",
+            "arm_95": "c",
+            "blt_body": "c",
+            "acc_131": "c",
+            "acc_130": "c",
+            "arm_107": "c",
+            "wpn_siruge": "c",
+            "arm_80": "c",
+            "arm_82": "c",
+            "arm_81": "c",
+            "arm_83": "c",
+            "rng_earth": "c",
+            "rng_water": "c",
+            "rng_wind": "c",
+            "rng_fire": "c",
+            "wpn_demon_axehead": "c",
+            "bk_royal_burnweapon": "c",
+            "bk_royal_bravewill": "c",
+            "bk_royal_shield": "c",
+            "bk_royal_kingguard": "c",
+            "wpn_ancient_spear": "c",
+            "wpn_ancient_axe": "c",
+            "wpn_chain_destroyer": "c",
+            "armguard_archer": "c",
+            "armguard_fighter": "c",
+            "wpn_old_sword": "c",
+            "wpn_old_greatsword": "c",
+            "wpn_old_xbow": "c",
+            "amr_old_scale": "c",
+            "amr_old_leather": "c",
+            "amr_old_robe": "c",
+            "amr_old_plate": "c",
+            "bk_elf_mr": "s",
+            "bk_elf_mind": "s",
+            "bk_elf_worldtree": "s",
+            "bk_elf_purify": "s",
+            "bk_elf_firewpn": "s",
+            "bk_elf_windshot": "s",
+            "bk_elf_earthguard": "s",
+            "bk_elf_eleres": "s",
+            "bk_elf_singleres": "s",
+            "bk_fireball": "s",
+            "bk_vampire": "s",
+            "bk_rock_prison": "s",
+            "bk_thunder": "s",
+            "bk_ice_spike": "s",
+            "bk_bless_wpn": "s",
+            "bk_heal1": "s",
+            "bk_sunlight": "s",
+            "bk_shield": "s",
+            "bk_lightarrow": "s",
+            "bk_teleport": "s",
+            "bk_icearrow": "s",
+            "bk_windblade": "s",
+            "bk_holy_wpn": "s",
+            "bk_antidote": "s",
+            "bk_cold_shiver": "s",
+            "bk_poison_curse": "s",
+            "bk_ench_wpn": "s",
+            "bk_reveal": "s",
+            "bk_load_up": "s",
+            "bk_firearrow": "s",
+            "bk_hell_fang": "s",
+            "bk_heal_mid": "s",
+            "bk_shield2": "s",
+            "bk_energy_sense": "s",
+            "bk_chill": "s",
+            "bk_aurora": "s",
+            "bk_dark_blind": "s",
+            "bk_undead_bane": "s",
+            "arm_103": "s",
+            "arm_105": "s",
+            "arm_108": "s",
+            "arm_42": "s",
+            "arm_43": "s",
+            "hlm_mr": "s",
+            "arm_68": "s",
+            "arm_66": "s",
+            "arm_67": "s",
+            "amr_robe": "s",
+            "arm_65": "s",
+            "arm_63": "s",
+            "arm_69": "s",
+            "arm_60": "s",
+            "arm_61": "s",
+            "arm_62": "s",
+            "amr_plate": "s",
+            "new_item_189": "s",
+            "new_item_188": "s",
+            "new_item_187": "s",
+            "wpn_shortsword": "s",
+            "wpn_9": "s",
+            "wpn_scimitar": "s",
+            "wpn_37": "s",
+            "wpn_invader": "s",
+            "wpn_longsword": "s",
+            "wpn_damascus": "s",
+            "wpn_silversword": "s",
+            "wpn_2hsword": "s",
+            "wpn_katana": "s",
+            "wpn_13": "s",
+            "wpn_1": "s",
+            "wpn_19": "s",
+            "wpn_38": "s",
+            "wpn_20": "s",
+            "wpn_silveraxe": "s",
+            "wpn_witchwand": "s",
+            "wpn_18": "s",
+            "wpn_giantaxe": "s",
+            "wpn_28": "s",
+            "wpn_14": "s",
+            "wpn_6": "s",
+            "wpn_17": "s",
+            "wpn_7": "s",
+            "wpn_21": "s",
+            "wpn_16": "s",
+            "wpn_12": "s",
+            "potion_heal": "s",
+            "potion_strong": "s",
+            "potion_ult": "s",
+            "potion_blue": "s",
+            "potion_haste": "s",
+            "scroll_poly": "s",
+            "scroll_magicbarrier": "s",
+            "scroll_teleport": "s",
+            "scroll_revive": "s",
+            "wpn_22": "s",
+            "candle": "s",
+            "new_item_143": "s",
+            "wpn_claw_bronze": "s",
+            "wpn_claw_steel": "s",
+            "wpn_claw_shadow": "s",
+            "wpn_claw_damascus": "s",
+            "wpn_dual_bronze": "s",
+            "wpn_dual_steel": "s",
+            "wpn_dual_shadow": "s",
+            "wpn_dual_damascus": "s",
+            "bk_dark_str": "s",
+            "bk_dark_mrup": "s",
+            "bk_dark_stealth": "s",
+            "bk_dark_poison": "s",
+            "bk_dark_refine": "s",
+            "bk_dark_dex": "s",
+            "bk_dark_poisonres": "s",
+            "bk_dark_burn": "s",
+            "bk_dark_walkhaste": "s",
+            "mem_confuse": "s",
+            "mem_mirror": "s",
+            "mem_crush": "s",
+            "mem_ogre": "s",
+            "mem_focus": "s",
+            "mem_skullbreak": "s",
+            "mem_lich": "s",
+            "mem_endure": "s",
+            "bk_dragon_guardbreak": "s",
+            "bk_dragon_slaughter": "s",
+            "bk_dragon_flameslash": "s",
+            "bk_dragon_terror": "s",
+            "potion_brave": "s",
+            "new_item_140": "s",
+            "new_item_139": "s",
+            "new_item_142": "s",
+            "wpn_illu_wand": "e",
+            "mem_cube_burn": "e",
+            "shd_illu_book": "e",
+            "mem_cube_shock": "e",
+            "clk_illu": "e",
+            "wpn_qigu_sapphire": "e",
+            "wpn_warrior_trial_axe": "e",
+            "bk_warrior_dualaxe": "e",
+            "clk_warrior_corps": "e",
+            "bk_warrior_roar": "e",
+            "hlm_warrior_corps": "e",
+            "wpn_master_axe": "e",
+            "wpn_dragon_2h": "e",
+            "bk_dragon_armor": "e",
+            "armguard_dragonscale": "e",
+            "bk_dragon_bloodlust": "e",
+            "clk_dragon": "e",
+            "wpn_chain_annihilator": "e",
+            "item_cyclops_blood": "e",
+            "item_demon_search": "e",
+            "item_demon_spy": "e",
+            "item_yeti_heart": "e",
+            "item_soulfire_ash": "e",
+            "arm_shadowglove": "e",
+            "arm_shadowmask": "e",
+            "arm_shadowboots": "e",
+            "wpn_demon_sword_hidden": "e",
+            "wpn_demon_bow_hidden": "e",
+            "wpn_demon_wand_hidden": "e",
+            "wpn_demon_claw_hidden": "e",
+            "wpn_demon_chain_hidden": "e",
+            "wpn_demon_qigu_hidden": "e",
+            "arm_bluepirate_boots": "e",
+            "arm_bluepirate_helm": "e",
+            "arm_bluepirate_armor": "e",
+            "arm_bluepirate_gloves": "e",
+            "arm_bluepirate_cloak": "e",
+            "acc_icequeen_ear_1": "c",
+            "acc_icequeen_ear_2": "c",
+            "acc_icequeen_ear_3": "c",
+            "acc_icequeen_ear_4": "c",
+            "acc_icequeen_ear_5": "c",
+            "acc_icequeen_ear_6": "c",
+            "acc_icequeen_ear_7": "c",
+            "acc_icequeen_ear_8_str": "c",
+            "acc_icequeen_ear_8_dex": "c",
+            "acc_icequeen_ear_8_int": "c",
+            "acc_icequeen_ear_8_con": "c",
+            "acc_icequeen_ear_8_wis": "c",
+            "acc_icequeen_ear_8_cha": "c",
+            "acc_ear_wisdom": "c",
+            "acc_ear_truth": "c",
+            "acc_ear_dominate": "c",
+            "acc_ear_rage": "c",
+            "acc_ear_brave": "c",
+            "acc_ear_undead": "c",
+            "acc_ear_passion": "c",
+            "acc_ear_honor": "c",
+            "acc_ear_tolerance": "c",
+            "acc_ear_dance": "c",
+            "acc_ear_twin": "c",
+            "acc_ear_festival": "c",
+            "acc_ear_peak": "c",
+            "acc_ear_rampage": "c",
+            "acc_ear_phantom": "c",
+            "acc_ear_clan": "c",
+            "acc_ear_slave": "c",
+            "acc_ring_magic": "c",
+            "acc_ring_str": "c",
+            "acc_ring_dex": "c",
+            "acc_ring_int": "c",
+            "acc_belt_fire": "c",
+            "acc_belt_water": "c",
+            "acc_belt_earth": "c",
+            "acc_belt_wind": "c",
+            "mat_rasta_codex": "c",
+            "wpn_emperor_blade": "c",
+            "wpn_windblade_dagger": "c",
+            "wpn_redshadow_dual": "c",
+            "wpn_beastking_claw": "c",
+            "wpn_holycrystal_wand": "c",
+            "doll_野狼寶寶": "e",
+            "doll_史巴托": "e",
+            "doll_奎斯坦修": "e",
+            "doll_稻草人": "e",
+            "doll_蛇女": "e",
+            "doll_肥肥": "e",
+            "doll_希爾黛斯": "e",
+            "doll_石頭高崙": "e",
+            "doll_長老": "e",
+            "doll_雪怪": "e",
+            "doll_亞力安": "e",
+            "doll_美人魚": "e",
+            "doll_小思克巴": "e",
+            "doll_巨人": "e",
+            "doll_王子": "e",
+            "doll_公主": "e",
+            "doll_男騎士": "e",
+            "doll_女騎士": "e",
+            "doll_男妖精": "e",
+            "doll_女妖精": "e",
+            "doll_男法師": "e",
+            "doll_女法師": "e",
+            "doll_男黑暗妖精": "e",
+            "doll_女黑暗妖精": "e",
+            "doll_男龍騎士": "e",
+            "doll_女龍騎士": "e",
+            "doll_男幻術士": "e",
+            "doll_女幻術士": "e",
+            "doll_思克巴女皇": "e",
+            "doll_阿魯巴": "e",
+            "doll_墮落": "e",
+            "doll_變形怪": "e",
+            "doll_飛龍": "e",
+            "doll_莫提斯": "e",
+            "doll_黑長者": "e",
+            "doll_獨眼巨人": "e",
+            "doll_雪人": "e",
+            "doll_艾莉絲": "e",
+            "doll_木乃伊王": "e",
+            "doll_死亡騎士": "e",
+            "doll_巴風特": "e",
+            "doll_吸血鬼": "e",
+            "doll_克特": "e",
+            "doll_冰之女王": "e",
+            "doll_巴蘭卡": "e",
+            "doll_巫妖": "e",
+            "doll_安塔瑞斯": "e",
+            "doll_法利昂": "e",
+            "doll_林德拜爾": "e",
+            "doll_巴拉卡斯": "e"
+        };
+        const zoneNames = {
+            "elder_room": "格蘭肯神殿．長老之室",
+            "twilight_mt": "黃昏山脈",
+            "oblivion_island": "遺忘之島",
+            "oblivion_travel": "遺忘之島途中",
+            "elf_grave": "精靈墓穴",
+            "hidden_cave": "大洞穴隱遁者村莊地區",
+            "giant_tomb": "古代巨人之墓",
+            "demon_temple": "魔族神殿",
+            "shadow_temple": "暗影神殿",
+            "pride_f71": "傲慢之塔 71樓",
+            "pride_f72": "傲慢之塔 72樓",
+            "pride_f73": "傲慢之塔 73樓",
+            "pride_f74": "傲慢之塔 74樓",
+            "pride_f75": "傲慢之塔 75樓",
+            "pride_f76": "傲慢之塔 76樓",
+            "pride_f77": "傲慢之塔 77樓",
+            "pride_f78": "傲慢之塔 78樓",
+            "pride_f79": "傲慢之塔 79樓",
+            "pride_f80": "傲慢之塔 80樓",
+            "pride_f81": "傲慢之塔 81樓",
+            "pride_f82": "傲慢之塔 82樓",
+            "pride_f83": "傲慢之塔 83樓",
+            "pride_f84": "傲慢之塔 84樓",
+            "pride_f85": "傲慢之塔 85樓",
+            "pride_f86": "傲慢之塔 86樓",
+            "pride_f87": "傲慢之塔 87樓",
+            "pride_f88": "傲慢之塔 88樓",
+            "pride_f89": "傲慢之塔 89樓",
+            "pride_f90": "傲慢之塔 90樓",
+            "pride_f91": "傲慢之塔 91樓",
+            "pride_f92": "傲慢之塔 92樓",
+            "pride_f93": "傲慢之塔 93樓",
+            "pride_f94": "傲慢之塔 94樓",
+            "pride_f95": "傲慢之塔 95樓",
+            "pride_f96": "傲慢之塔 96樓",
+            "pride_f97": "傲慢之塔 97樓",
+            "pride_f98": "傲慢之塔 98樓",
+            "pride_f99": "傲慢之塔 99樓",
+            "pride_f100": "傲慢之塔 100樓",
+            "pride_71_80": "傲慢之塔 71-80樓",
+            "pride_81_90": "傲慢之塔 81-90樓",
+            "pride_91_100": "傲慢之塔 91-100樓",
+            "pride_f51": "傲慢之塔 51樓",
+            "pride_f52": "傲慢之塔 52樓",
+            "pride_f53": "傲慢之塔 53樓",
+            "pride_f54": "傲慢之塔 54樓",
+            "pride_f55": "傲慢之塔 55樓",
+            "pride_f56": "傲慢之塔 56樓",
+            "pride_f57": "傲慢之塔 57樓",
+            "pride_f58": "傲慢之塔 58樓",
+            "pride_f59": "傲慢之塔 59樓",
+            "pride_f60": "傲慢之塔 60樓",
+            "pride_f61": "傲慢之塔 61樓",
+            "pride_f62": "傲慢之塔 62樓",
+            "pride_f63": "傲慢之塔 63樓",
+            "pride_f64": "傲慢之塔 64樓",
+            "pride_f65": "傲慢之塔 65樓",
+            "pride_f66": "傲慢之塔 66樓",
+            "pride_f67": "傲慢之塔 67樓",
+            "pride_f68": "傲慢之塔 68樓",
+            "pride_f69": "傲慢之塔 69樓",
+            "pride_f70": "傲慢之塔 70樓",
+            "pride_51_60": "傲慢之塔 51-60樓",
+            "pride_61_70": "傲慢之塔 61-70樓",
+            "pride_f2": "傲慢之塔 2樓",
+            "pride_f3": "傲慢之塔 3樓",
+            "pride_f4": "傲慢之塔 4樓",
+            "pride_f5": "傲慢之塔 5樓",
+            "pride_f6": "傲慢之塔 6樓",
+            "pride_f7": "傲慢之塔 7樓",
+            "pride_f8": "傲慢之塔 8樓",
+            "pride_f9": "傲慢之塔 9樓",
+            "pride_f10": "傲慢之塔 10樓",
+            "pride_f11": "傲慢之塔 11樓",
+            "pride_f12": "傲慢之塔 12樓",
+            "pride_f13": "傲慢之塔 13樓",
+            "pride_f14": "傲慢之塔 14樓",
+            "pride_f15": "傲慢之塔 15樓",
+            "pride_f16": "傲慢之塔 16樓",
+            "pride_f17": "傲慢之塔 17樓",
+            "pride_f18": "傲慢之塔 18樓",
+            "pride_f19": "傲慢之塔 19樓",
+            "pride_f20": "傲慢之塔 20樓",
+            "pride_f21": "傲慢之塔 21樓",
+            "pride_f22": "傲慢之塔 22樓",
+            "pride_f23": "傲慢之塔 23樓",
+            "pride_f24": "傲慢之塔 24樓",
+            "pride_f25": "傲慢之塔 25樓",
+            "pride_f26": "傲慢之塔 26樓",
+            "pride_f27": "傲慢之塔 27樓",
+            "pride_f28": "傲慢之塔 28樓",
+            "pride_f29": "傲慢之塔 29樓",
+            "pride_f30": "傲慢之塔 30樓",
+            "pride_f31": "傲慢之塔 31樓",
+            "pride_f32": "傲慢之塔 32樓",
+            "pride_f33": "傲慢之塔 33樓",
+            "pride_f34": "傲慢之塔 34樓",
+            "pride_f35": "傲慢之塔 35樓",
+            "pride_f36": "傲慢之塔 36樓",
+            "pride_f37": "傲慢之塔 37樓",
+            "pride_f38": "傲慢之塔 38樓",
+            "pride_f39": "傲慢之塔 39樓",
+            "pride_f40": "傲慢之塔 40樓",
+            "pride_f41": "傲慢之塔 41樓",
+            "pride_f42": "傲慢之塔 42樓",
+            "pride_f43": "傲慢之塔 43樓",
+            "pride_f44": "傲慢之塔 44樓",
+            "pride_f45": "傲慢之塔 45樓",
+            "pride_f46": "傲慢之塔 46樓",
+            "pride_f47": "傲慢之塔 47樓",
+            "pride_f48": "傲慢之塔 48樓",
+            "pride_f49": "傲慢之塔 49樓",
+            "pride_f50": "傲慢之塔 50樓",
+            "pride_2_10": "傲慢之塔 2-10樓",
+            "pride_11_20": "傲慢之塔 11-20樓",
+            "pride_21_30": "傲慢之塔 21-30樓",
+            "pride_31_40": "傲慢之塔 31-40樓",
+            "pride_41_50": "傲慢之塔 41-50樓",
+            "silent_outer": "沉默洞穴周邊",
+            "kent_outer": "肯特外門區",
+            "kent_inner": "肯特內城",
+            "heine_outer": "海音外門區",
+            "heine_inner": "海音內城",
+            "rastabad_gate": "拉斯塔巴德正門",
+            "rastabad_beast": "魔獸訓練場",
+            "king_baranka_room": "魔獸軍王之室",
+            "law_king_room": "法令軍王之室",
+            "necro_king_room": "冥法軍王之室",
+            "assassin_king_room": "暗殺軍王之室",
+            "dark_magic_lab": "黑魔法研究室",
+            "necro_training": "冥法軍訓練場",
+            "rastabad_cave1": "拉斯塔巴德地下洞穴1樓",
+            "rastabad_cave2": "拉斯塔巴德地下洞穴2樓",
+            "rastabad_cave3": "拉斯塔巴德地下洞穴3樓",
+            "windwood_dungeon": "風木地監",
+            "ww_inner": "風木內城",
+            "ww_outer": "風木外門區",
+            "training": "新兵修練場",
+            "silver_knight": "銀騎士地區",
+            "talking_island": "說話之島周邊",
+            "zone_01": "妖精森林周邊",
+            "elf_forest": "妖魔森林",
+            "talking_island_port": "說話之島港口",
+            "gludio": "古魯丁",
+            "windwood": "風木",
+            "desert": "沙漠",
+            "kent": "肯特",
+            "dragon_valley": "龍之谷",
+            "fire_dragon": "火龍窟",
+            "giran": "奇岩",
+            "heine": "海音",
+            "mirror_forest": "鏡子森林",
+            "zone_02": "歐瑞",
+            "zone_03": "歐瑞雪原",
+            "zone_04": "艾爾摩激戰地",
+            "zone_05": "國境要塞",
+            "zone_06": "古魯丁地監1樓",
+            "zone_07": "古魯丁地監2樓",
+            "zone_08": "古魯丁地監3樓",
+            "zone_09": "古魯丁地監4樓",
+            "zone_10": "古魯丁地監5樓",
+            "zone_11": "古魯丁地監6樓",
+            "zone_12": "古魯丁地監7樓",
+            "zone_13": "說話之島地監1樓",
+            "zone_14": "說話之島地監2樓",
+            "zone_15": "眠龍洞穴1樓",
+            "zone_16": "眠龍洞穴2樓",
+            "zone_17": "眠龍洞穴3樓",
+            "zone_18": "奇岩地監1樓",
+            "zone_19": "奇岩地監2樓",
+            "zone_20": "奇岩地監3樓",
+            "zone_21": "奇岩地監4樓",
+            "zone_22": "沙漠地監1樓",
+            "zone_23": "沙漠地監2樓",
+            "zone_24": "沙漠地監3樓",
+            "zone_25": "沙漠地監4樓",
+            "zone_26": "龍之谷地監1樓",
+            "zone_27": "龍之谷地監2樓",
+            "zone_28": "龍之谷地監3樓",
+            "zone_29": "龍之谷地監4樓",
+            "zone_30": "龍之谷地監5樓",
+            "zone_31": "龍之谷地監6樓",
+            "zone_32": "螞蟻洞窟1樓",
+            "zone_33": "螞蟻洞窟2樓",
+            "zone_34": "地下通道1樓",
+            "zone_35": "地下通道2樓",
+            "zone_36": "地下通道3樓",
+            "eva_kingdom": "伊娃王國",
+            "crystal_cave1": "水晶洞穴1樓",
+            "crystal_cave2": "水晶洞穴2樓",
+            "crystal_cave3": "水晶洞穴3樓",
+            "zone_37": "象牙塔4樓",
+            "zone_38": "象牙塔5樓",
+            "zone_39": "象牙塔6樓",
+            "zone_40": "象牙塔7樓",
+            "zone_41": "象牙塔8樓",
+            "antaras_lair": "安塔瑞斯棲息地(純BOSS房)",
+            "fafurion_lair": "法利昂巢穴(純BOSS房)",
+            "valakas_lair": "巴拉卡斯巢穴(純BOSS房)",
+            "dream_island": "夢幻之島",
+            "thebes_desert": "底比斯 沙漠",
+            "thebes_pyramid": "底比斯 金字塔內部",
+            "thebes_temple": "底比斯 歐西里斯祭壇",
+            "pirate_wild": "海賊島",
+            "pirate_dungeon": "海賊島地監",
+            "hidden_lab_nolife": "無生物研究室",
+            "hidden_lab_darkmagic": "黑魔法研究室",
+            "hidden_seal_spirit": "惡靈封印室",
+            "hidden_seal_monster": "魔物封印室",
+            "hidden_seal_demon": "惡魔封印室",
+            "hidden_antqueen": "巨蟻女皇棲息地"
+        };
+
+        // 建立 怪物中文名稱 -> 怪物詳細屬性與ID 的映射表
+        let monsterInfoMap = {};
+        let monsterNameToIdMap = {};
+
+        // ===== 席琳的世界：怪物數值套用 =====
+        let currentWorldMode = 'normal'; // 'normal' | 'sherine' | 'mad' | 'classic'
+
+        function setWorldMode(mode) {
+            currentWorldMode = mode;
+            document.getElementById('btnNormal').className = 'toggle-btn' + (mode === 'normal' ? ' active-normal' : '');
+            document.getElementById('btnSherine').className = 'toggle-btn' + (mode === 'sherine' ? ' active-sherine' : '');
+            document.getElementById('btnMad').className = 'toggle-btn' + (mode === 'mad' ? ' active-mad' : '');
+            document.getElementById('btnClassic').className = 'toggle-btn' + (mode === 'classic' ? ' active-classic' : '');
+            document.getElementById('worldModeDesc').textContent =
+                mode === 'sherine' ? '顯示席琳的世界強化後數值（攻城/血盟除外）'
+                : mode === 'mad' ? '顯示瘋狂的席琳世界數值（攻城/血盟除外）：怪更強、報酬更高'
+                : mode === 'classic' ? '顯示經典模式（硬核）：掉落率×1/10，經驗½、金幣10%'
+                : '顯示原始怪物數值與掉落機率';
+            const _sherLike = (mode === 'sherine' || mode === 'mad');
+            document.getElementById('sherineInfoBox').className = 'sherine-info-box' + (_sherLike ? ' visible' : '');
+            document.getElementById('sherineGraceBox').className = 'sherine-grace-box' + (_sherLike ? ' visible' : '');
+            document.getElementById('sherineDropBox').className = 'sherine-drop-box' + (_sherLike ? ' visible' : '');
+            document.getElementById('classicInfoBox').className = 'classic-info-box' + (mode === 'classic' ? ' visible' : '');
+            document.body.className = mode === 'sherine' ? 'sherine-mode' : (mode === 'mad' ? 'sherine-mode sherine-mad' : (mode === 'classic' ? 'classic-mode' : ''));
+            filterData();
+        }
+
+        function applySherineStats(mobInfo, mad) {
+            if (!mobInfo) return mobInfo;
+            return {
+                ...mobInfo,
+                hp:  Math.floor((mobInfo.hp  || 0) * (mad ? 5 : 3)),
+                ac:  (mobInfo.ac ?? 0) - (mobInfo.boss ? 20 : 10),
+                mr:  Math.floor((mobInfo.mr  || 0) * (mad ? 3 : 1.5)),
+                _sherine: true
+            };
+        }
+
+        function applyShineDropRate(rate, mad) {
+            return Math.min(100, parseFloat((rate * (mad ? 5 : 3)).toFixed(4)));
+        }
+        function applyClassicDropRate(rate) {
+            return Math.max(0.0001, parseFloat((rate * 0.1).toFixed(4)));
+        }
+        function srcBadges(code){
+            const m=(window.ITEM_SRC&&window.ITEM_SRC[code])||"";
+            if(!m) return "";
+            const st="font-size:0.8em;margin-left:3px;cursor:help;";
+            let b="";
+            if(m.indexOf("c")>=0) b+="<span title=\"可製作\" style=\""+st+"\">\uD83D\uDD28</span>";
+            if(m.indexOf("s")>=0) b+="<span title=\"商店販售\" style=\""+st+"\">\uD83C\uDFEA</span>";
+            if(m.indexOf("e")>=0) b+="<span title=\"可兌換\" style=\""+st+"\">\uD83D\uDD01</span>";
+            return b;
+        }
+        Object.entries(dMobs).forEach(([mobId, mobData]) => {
+            if (mobData && mobData.n) {
+                monsterInfoMap[mobData.n] = mobData;
+                monsterNameToIdMap[mobData.n] = mobId;
+            }
+        });
+
+        // 建立 怪物代碼 -> 出沒地圖中文名稱清單 對照表
+        let mobIdToZonesMap = {};
+        Object.entries(dZones).forEach(([zoneId, mobIds]) => {
+            if (Array.isArray(mobIds)) {
+                mobIds.forEach(id => {
+                    if (!mobIdToZonesMap[id]) mobIdToZonesMap[id] = [];
+                    const cName = zoneNames[zoneId] || zoneId;
+                    if (!mobIdToZonesMap[id].includes(cName)) {
+                        mobIdToZonesMap[id].push(cName);
+                    }
+                });
+            }
+        });
+
+        // 道具代碼轉換中文
+        function translate(itemCode) {
+            return dItems[itemCode] ? dItems[itemCode].n : itemCode;
+        }
+
+        // 機率顏色分級
+        function getRateClass(rate) {
+            if (rate <= 0.1) return 'rate-legendary';
+            if (rate <= 1.0) return 'rate-rare';
+            return 'rate-common';
+        }
+
+        // 渲染卡片
+        const helmSkillMap = {"sk_helm_heal1":"治盔：初級治癒術","sk_helm_heal2":"治盔：中級治癒術","sk_helm_dex1":"敏盔：氣脈通暢術","sk_helm_dex2":"敏盔：加速術","sk_helm_str1":"力盔：擬似魔法武器","sk_helm_str2":"力盔：無所遁形術","sk_helm_str3":"力盔：體魄強健術"};
+        const effMap = {"soulorb": "靈魂之球 (與失去魔力的魔杖共鳴，喚回沉睡的傳說武器)", "evolve": "進化 (寵物進化果實)", "pride_unseal": "解除封印 (使用後獲得對應樓層的傲慢之塔傳送符)", "combo": "連擊 (鋼爪/雙刀)", "magicburst": "魔爆 (施放傷害魔法時機率對全體追加該次魔法傷害30%的無屬性傷害)", "crush": "粉碎 (無視防禦)", "pierce": "貫穿 (無視防禦)", "moonburst": "月光爆炸", "dice_death": "骰子死亡 (隨機倍率)", "blue": "魔力回復 (藍水)", "brave": "勇氣 (二段加速)", "haste": "加速 (一段加速)", "cleave": "切割 (重擊觸發攻速+20%)", "magicstrike": "魔法打擊", "magicbarrier": "魔法屏障", "mp_drain": "魔力吸取", "poly": "變身", "teleport_scroll": "傳送", "panacea": "萬能藥", "meat": "飽食度增加", "whistle": "哨子 (召喚)", "elfcookie": "精靈餅乾 (三段加速)", "reset": "重置", "cautious": "慎重 (魔攻提升)", "stun": "衝擊之暈", "freeze": "冰凍", "stone": "石化", "sleep": "沉睡", "poison": "中毒", "blind": "目盲", "weaken": "弱化", "disease": "疾病", "broken": "損壞", "slow": "緩速", "mrhalf": "魔抗減半", "magicseal": "魔法封印", "osiris_box": "開啟歐西里斯寶箱 (隨機獲得底比斯/新職業裝備)"};
+
+        // ===== 🛡️ 硬皮系統（依遊戲 initHardSkin 公式即時計算；只有 hard:true 的怪有硬皮）=====
+        const HARD_MOBS = new Set(['siege_tower','siege_gate','siege_tower_ww','siege_gate_ww','baless','stone_golem','dragon_turtle','crustacean','nm_016','giant_croc','nm_017','nm_018','nm_022','kari','nm_024','necromancer','lava_golem','ice_queen','batus','casper','marcus','ifrit','wyvern','blackelder','doppel_boss','baphomet','kurt','dk','ant_queen','phoenix','nm_034','antaras','fafurion','valakas','sema','siege_tower_heine','siege_gate_heine','de_king_baranka','de_king_laia','de_king_heruby','de_king_slayer','de_necro_avenger','de_necro_warlock','de_necro_omwarrior','de_necro_darklord','de_necro_omheavy','pride_jenis','pride_mimic','pride_phantom_boss','pride_vampire_boss','pride_zombie_king','pride_drake','pride_irongolem','pride_bonedragon','pride_panther_boss','pride_mummy_king','pride_iris_boss','pride_dark_blackknight','pride_vander_boss','pride_lich_boss','pride_reaper_boss','mambo_rabbit','abyss_lord','tomb_guardian','tomb_guardian_mage','tomb_guardian_knight','tomb_guardian_giant','flame_baless','fallen_boss','chaos_boss','death_boss','obli_bigtaurus','giant_ancient','ice_demon','lindvior','thebes_obelisk','thebes_obelisk_b','thebes_anubis','thebes_horus']);
+        function calcHardSkin(m) {
+            if (!m) return null;
+            if (m.n === '肯特城門' || m.n === '風木城門' || m.n === '海音城門') return { building: true, formula: '玩家等級' };
+            if (m.n === '肯特守護塔' || m.n === '風木守護塔' || m.n === '海音守護塔') return { building: true, formula: '玩家等級÷2' };
+            const per = ['安塔瑞斯', '法利昂', '巴拉卡斯'].includes(m.n) ? 2 : (m.boss ? 1 : 0.5);   // 三大龍×2、頭目×1、一般×0.5（席琳世界不再加成）
+            return { building: false, base: Math.max(1, Math.floor((m.lv || 1) * per)) };
+        }
+
+        
+        // ===== 職業技能 / 套裝 分頁 =====
+        let _ssCls = 'knight';
+        function switchMainTab(which) {
+            const drop = document.getElementById('tabDrop');
+            const ss = document.getElementById('tabSkillset');
+            const it = document.getElementById('tabItems');
+            const mtd = document.getElementById('mtab-drop');
+            const mts = document.getElementById('mtab-skill');
+            const mti = document.getElementById('mtab-items');
+            [drop,ss,it].forEach(el=>{if(el)el.style.display='none';});
+            [mtd,mts,mti].forEach(el=>{if(el)el.classList.remove('active');});
+            if (which === 'skill') {
+                ss.style.display='block'; mts.classList.add('active');
+                renderSkillset(_ssCls);
+            } else if (which === 'items') {
+                it.style.display='block'; mti.classList.add('active');
+                if (!window._icInited) { initItemCatalog(); window._icInited=true; }
+            } else {
+                drop.style.display='block'; mtd.classList.add('active');
+            }
+        }
+
+        // ===== 📦 道具圖鑑 =====
+        const _IC_EFFMAP = {"soulorb":"靈魂之球","evolve":"進化","pride_unseal":"解除封印","combo":"連擊","magicburst":"魔爆","crush":"粉碎(無視防禦)","pierce":"貫穿(無視防禦)","moonburst":"月光爆炸","dice_death":"骰子死亡","blue":"魔力回復","brave":"勇氣(二段加速)","haste":"加速","cleave":"切割(重擊觸發攻速+20%)","magicstrike":"魔法打擊","magicbarrier":"魔法屏障","mp_drain":"魔力吸取","poly":"變身","teleport_scroll":"傳送","panacea":"萬能藥","meat":"飽食度增加","whistle":"哨子(召喚)","reset":"重置","cautious":"慎重(魔攻提升)","stun":"衝擊之暈","freeze":"冰凍","stone":"石化","sleep":"沉睡","poison":"中毒","blind":"目盲","weaken":"弱化","disease":"疾病","broken":"損壞","slow":"緩速","mrhalf":"魔抗減半","magicseal":"魔法封印","osiris_box":"開啟歐西里斯寶箱"};
+        // 技能書 → 可學職業 對照表（從 SKILLS_TAB 反向建構，零硬編碼）
+        // 一本書可被多個職業使用，故每本書對應一組職業 Set
+        let _bookToClasses=null;
+        function buildBookClassMap() {
+            const map={};
+            const tab=window.SKILLS_TAB;
+            if(!tab) return map;
+            for(const cls of Object.keys(tab)){
+                const list=tab[cls];
+                if(!Array.isArray(list))continue;
+                for(const sk of list){
+                    const bk=sk&&sk.bk;
+                    if(!bk)continue;
+                    if(!map[bk])map[bk]=new Set();
+                    map[bk].add(cls);
+                }
+            }
+            return map;
+        }
+        function bookHasClass(itemName,cls){
+            if(!_bookToClasses)_bookToClasses=buildBookClassMap();
+            const set=_bookToClasses[itemName];
+            return !!(set&&set.has(cls));
+        }
+
+        const IC_CATS = [
+          {id:'wpn',label:'⚔️ 武器',subs:[
+            {id:'wpn_1h',label:'單手武器'},
+            {id:'wpn_2h',label:'雙手武器'},
+            {id:'wpn_bow',label:'弓・弩'},
+            {id:'wpn_arrow',label:'箭矢'},
+            {id:'wpn_qigu',label:'奇古獸'},
+          ]},
+          {id:'arm',label:'🛡️ 防具',subs:[
+            {id:'arm_armor',label:'盔甲・長袍'},
+            {id:'arm_helm',label:'頭盔・面具'},
+            {id:'arm_shield',label:'盾牌・副手'},
+            {id:'arm_gloves',label:'手套・腕甲'},
+            {id:'arm_boots',label:'長靴・涼鞋'},
+            {id:'arm_cloak',label:'斗篷'},
+            {id:'arm_tshirt',label:'貼身衣'},
+          ]},
+          {id:'acc',label:'💍 飾品',subs:[
+            {id:'acc_ring',label:'戒指'},
+            {id:'acc_amulet',label:'項鍊'},
+            {id:'acc_ear',label:'耳環'},
+            {id:'acc_belt',label:'腰帶・皮帶'},
+            {id:'acc_pet',label:'寵物飾品'},
+            {id:'acc_doll',label:'🎎 魔法娃娃'},
+          ]},
+          {id:'relic',label:'🏺 遺物',subs:[
+            {id:'relic_wpn',label:'武器'},
+            {id:'relic_arm',label:'防具'},
+            {id:'relic_acc',label:'飾品'},
+          ]},
+          {id:'skillbk',label:'📚 技能書',subs:[
+            {id:'bk_knight',label:'騎士'},
+            {id:'bk_mage',label:'法師'},
+            {id:'bk_elf',label:'妖精'},
+            {id:'bk_dark',label:'黑暗妖精'},
+            {id:'bk_illusion',label:'幻術士'},
+            {id:'bk_dragon',label:'龍騎士'},
+            {id:'bk_warrior',label:'戰士'},
+            {id:'bk_royal',label:'王族'},
+          ]},
+          {id:'consume',label:'🧪 消耗品',subs:[
+            {id:'con_pot',label:'藥水'},
+            {id:'con_scroll',label:'卷軸'},
+            {id:'con_misc',label:'其他消耗'},
+          ]},
+          {id:'mat',label:'🗿 材料・任務・其他',subs:[
+            {id:'mat_gem',label:'💎 寶石'},
+            {id:'mat_enhscroll',label:'📜 強化卷軸'},
+            {id:'mat_craft',label:'🔨 製作素材'},
+            {id:'mat_key',label:'🔑 鑰匙'},
+            {id:'mat_collar',label:'🐕 項圈'},
+            {id:'mat_quest',label:'📋 任務・特殊'},
+          ]},
+        ];
+        let _icCat=null,_icOpenG={};
+
+        function icCatFilter(id,item,itemId) {
+            const t=item.type||'',s=item.slot||'',n=item.n||'',iid=itemId||'';
+            const hasBow=item.isBow||item.ranged,isArrow=item.isArrow,w2h=item.w2h,isQigu=item.qigu;
+            // 🏺 遺物閘：遺物只出現在「遺物」分類，並從一般武/防/飾分類排除（對齊遊戲獨立遺物收集冊）
+            const isRelicItem=!!item.relic;
+            const isRelicCat=id.indexOf('relic')===0;
+            if(isRelicItem&&!isRelicCat) return false;
+            if(!isRelicItem&&isRelicCat) return false;
+            if(isRelicCat){
+                if(id==='relic') return true;
+                if(id==='relic_wpn') return t==='wpn';
+                if(id==='relic_arm') return t==='arm';
+                if(id==='relic_acc') return t==='acc';
+                return false;
+            }
+            // === 材料・任務・其他 子分類偵測（與 type 無關，全靠 ID/名稱） ===
+            // 寶石：new_item_150 ~ new_item_162（魔法寶石、鑽石/紅/藍/綠寶石 各 3 階）
+            const isGem=/^new_item_(15[0-9]|16[0-2])$/.test(iid);
+            // 強化卷軸：對武器/盔甲/飾品施法的卷軸（+祝福_b/詛咒_c），以及「賦予祝福」「解除詛咒」系列
+            const isEnhScroll=/^scroll_(weapon|armor|acc)(_[bc])?$/.test(iid)
+                || /^new_item_bless_/.test(iid)
+                || iid==='new_item_uncurse';
+            // 鑰匙：名稱結尾「鑰匙」或 id 含 _key
+            const isKey=/鑰匙$/.test(n)||/_key(_|$)/.test(iid);
+            // 項圈：名稱開頭「項圈」
+            const isCollar=/^項圈/.test(n);
+            // 製作素材：type='etc'，或 id 開頭 mat_，或（無 type 時）名稱符合素材命名規律
+            const matPat=/(^米索莉|^奧里哈魯根|金屬|皮革|^線$|布料$|皮帶$|鱗$|鱗片$|龍鱗|血$|氣息$|羽毛$|羽翼$|碎片$|樹皮$|樹枝$|安特|蛻皮$|蜕皮$|芮克妮|鬃毛$|粉末$|灰燼$|骨頭|骷髏頭$|塊$|礦石$|^銀$|黑魔石$|元素石$|蘑菇汁$|^糖果$|食人巨魔|獨眼巨人|翼龍|變形怪|飛龍|蜥蜴的角|妖魔長老|雪怪首級|爪$|角$|牙齒$|指甲$|龜甲$|腳鐐$|魔法笛子|^精靈玉$|水果$|^網$|死亡誓約)/;
+            const isMat=!isGem&&!isEnhScroll&&!isKey&&!isCollar
+                &&(t==='etc'||/^mat_/.test(iid)||(!t&&matPat.test(n)));
+            // 其餘無 type 物品（任務・特殊）
+            const isQuestEtc=!t&&!isGem&&!isEnhScroll&&!isKey&&!isCollar&&!isMat;
+            switch(id) {
+                // 武器：完全用遊戲旗標分類，不再靠中文名正則
+                case 'wpn': return t==='wpn';
+                case 'wpn_bow': return t==='wpn'&&hasBow&&!isArrow;
+                case 'wpn_arrow': return t==='wpn'&&isArrow;
+                case 'wpn_qigu': return t==='wpn'&&isQigu;
+                case 'wpn_2h': return t==='wpn'&&w2h&&!hasBow&&!isQigu&&!isArrow;
+                case 'wpn_1h': return t==='wpn'&&!w2h&&!hasBow&&!isQigu&&!isArrow;
+                // 防具：依 slot
+                case 'arm': return t==='arm';
+                case 'arm_armor': return t==='arm'&&s==='armor';
+                case 'arm_helm': return t==='arm'&&s==='helm';
+                case 'arm_shield': return t==='arm'&&s==='shield';
+                case 'arm_gloves': return t==='arm'&&s==='gloves';
+                case 'arm_boots': return t==='arm'&&s==='boots';
+                case 'arm_cloak': return t==='arm'&&s==='cloak';
+                case 'arm_tshirt': return t==='arm'&&(s==='tshirt'||s==='undershirt');
+                // 飾品：依 slot
+                case 'acc': return t==='acc';
+                case 'acc_ring': return t==='acc'&&s==='ring';
+                case 'acc_amulet': return t==='acc'&&s==='amulet'&&!/耳環/.test(n);
+                case 'acc_ear': return t==='acc'&&(s==='ear'||(s==='amulet'&&/耳環/.test(n)));
+                case 'acc_belt': return t==='acc'&&(s==='belt'||s==='waist');
+                case 'acc_pet': return t==='acc'&&s==='pet';
+                case 'acc_doll': return t==='acc'&&s==='doll';
+                // 技能書：依「可學職業」分類（multi-bucket，一本書可出現在多個職業底下）
+                case 'skillbk': return t==='skillbk';
+                case 'bk_knight': return t==='skillbk'&&bookHasClass(n,'knight');
+                case 'bk_mage': return t==='skillbk'&&bookHasClass(n,'mage');
+                case 'bk_elf': return t==='skillbk'&&bookHasClass(n,'elf');
+                case 'bk_dark': return t==='skillbk'&&bookHasClass(n,'dark');
+                case 'bk_illusion': return t==='skillbk'&&bookHasClass(n,'illusion');
+                case 'bk_dragon': return t==='skillbk'&&bookHasClass(n,'dragon');
+                case 'bk_warrior': return t==='skillbk'&&bookHasClass(n,'warrior');
+                case 'bk_royal': return t==='skillbk'&&bookHasClass(n,'royal');
+                // 消耗品（強化卷軸已排除，會落到 mat_enhscroll）
+                case 'consume': return ['pot','heal','scroll','misc'].includes(t)&&!isEnhScroll;
+                case 'con_pot': return t==='pot'||t==='heal';
+                case 'con_scroll': return t==='scroll';
+                case 'con_misc': return t==='misc'&&!isEnhScroll;
+                // 材料・任務・其他
+                case 'mat': return t==='etc'||!t;
+                case 'mat_gem': return isGem;
+                case 'mat_enhscroll': return isEnhScroll;
+                case 'mat_craft': return isMat;
+                case 'mat_key': return isKey;
+                case 'mat_collar': return isCollar;
+                case 'mat_quest': return isQuestEtc;
+                default: return false;
+            }
+        }
+
+        function buildIcSidebar() {
+            const sb=document.getElementById('icSidebar');
+            if(!sb)return;
+            let h='';
+            IC_CATS.forEach(g=>{
+                const hasSubs=g.subs&&g.subs.length>0;
+                const isOpen=_icOpenG[g.id];
+                h+=`<div class="ic-group${isOpen?' open':''}" id="icg-${g.id}">
+<div class="ic-group-header${isOpen?' open':''}" onclick="icToggleGroup('${g.id}',${!hasSubs},'${g.id}','${g.label.replace(/'/g,"\\'")}')">
+  <span>${g.label}</span>${hasSubs?'<span class="arrow">▶</span>':''}
+</div>
+${hasSubs?'<div class="ic-sublist">'+g.subs.map(s=>`<button class="ic-sub-btn${_icCat===s.id?' active':''}" onclick="icShowCat('${s.id}','${g.id}','${(g.label+' › '+s.label).replace(/'/g,"\\'")}')">${s.label}</button>`).join('')+'</div>':''}
+</div>`;
+            });
+            sb.innerHTML=h;
+        }
+
+        function icToggleGroup(gid,isLeaf,catId,catLabel) {
+            if(isLeaf){icShowCat(catId,catId,catLabel);return;}
+            _icOpenG[gid]=!_icOpenG[gid];
+            buildIcSidebar();
+        }
+
+        function icShowCat(catId,groupId,label) {
+            _icCat=catId;
+            IC_CATS.forEach(g=>{if(g.id===groupId)_icOpenG[g.id]=true;});
+            buildIcSidebar();
+            document.getElementById('icBreadcrumb').textContent='📦 '+label;
+            document.getElementById('icSearch').value='';
+            renderIcGrid(catId,'');
+        }
+
+        function icFilter() {
+            const q=document.getElementById('icSearch').value;
+            // 只要有輸入關鍵字就跨全圖鑑搜尋（忽略目前選中的子分類）
+            if(q.trim()){ renderIcGrid(null,q); return; }
+            // 關鍵字清空：恢復目前分類；若未選任何分類則清空
+            if(_icCat) renderIcGrid(_icCat,'');
+            else document.getElementById('icGrid').innerHTML='';
+        }
+
+        function renderIcGrid(catId,query) {
+            const db=window.ITEMS_DB;
+            if(!db){document.getElementById('icGrid').innerHTML='<div style="color:#475569;padding:20px;">資料尚未載入</div>';return;}
+            const q=(query||'').toLowerCase().trim();
+            const reqMap={all:'全職',elf:'妖精',knight:'騎士',mage:'法師',dark:'黑暗妖精',illusion:'幻術士',dragon:'龍騎士',warrior:'戰士',royal:'王族',pr:'王族'};
+            let items=[];
+            for(const [id,item] of Object.entries(db)){
+                if(!item||!item.n)continue;
+                if(catId&&!icCatFilter(catId,item,id))continue;
+                if(q&&!item.n.toLowerCase().includes(q))continue;
+                items.push([id,item]);
+            }
+            items.sort((a,b)=>{
+                if(a[1].legend&&!b[1].legend)return -1;
+                if(!a[1].legend&&b[1].legend)return 1;
+                return (a[1].n||'').localeCompare(b[1].n||'','zh-TW');
+            });
+            document.getElementById('icCount').textContent=`共 ${items.length} 件`;
+            if(!items.length){document.getElementById('icGrid').innerHTML='<div style="color:#475569;padding:20px;">沒有符合道具</div>';return;}
+            const slotN={armor:'盔甲',helm:'頭盔',shield:'盾牌',gloves:'手套',boots:'長靴',cloak:'斗篷',tshirt:'貼身衣',shin:'脛甲',belt:'腰帶',ring:'戒指',amulet:'項鍊',ear:'耳環',doll:'魔法娃娃',pet:'寵物飾品'};
+            document.getElementById('icGrid').innerHTML=items.map(([id,item])=>{
+                const isL=!!item.legend;
+                let tag='';
+                if(item.type==='wpn'){
+                    if(item.isArrow)tag='箭矢';
+                    else if(item.isBow)tag='弓';
+                    else if(item.qigu)tag='奇古獸';
+                    else if(item.w2h)tag='雙手';
+                    else tag='單手';
+                }else if(item.type==='arm'){tag=slotN[item.slot]||'';}
+                else if(item.type==='acc'){tag=slotN[item.slot]||'';}
+                else if(item.type==='skillbk'){tag='技能書';}
+                const reqT=item.req?item.req.split(',').map(r=>reqMap[r]||r).join('/'):'';
+                const sub=[reqT&&reqT!=='全職'?reqT:'',item.safe!=null?'安定'+item.safe:''].filter(Boolean).join(' · ');
+                return `<div class="ic-card${isL?' legend-card':''}" onclick="openIcModal('${id}')">
+  <div class="ic-card-name${isL?' ltext':''}">${isL?'🏅 ':''}${item.n}</div>
+  ${tag?'<span class="ic-card-tag">'+tag+'</span>':''}
+  ${sub?'<div class="ic-card-sub">'+sub+'</div>':''}
+</div>`;
+            }).join('');
+        }
+
+        function openIcModal(itemId) {
+            const db=window.ITEMS_DB,item=db&&db[itemId];
+            if(!item)return;
+            const reqMap={all:'全職業',elf:'妖精',knight:'騎士',pr:'王族',mage:'法師',dark:'黑暗妖精',illusion:'幻術士',dragon:'龍騎士',warrior:'戰士',royal:'王族'};
+            const statN={str:'力量',dex:'敏捷',con:'體質',int:'智力',wis:'精神',cha:'魅力'};
+            const resN={resFire:'火抗',resWater:'水抗',resEarth:'地抗',resWind:'風抗'};
+            const isL=!!item.legend;
+            const titleColor=isL?'#fca5a5':'#e2e8f0';
+            // 類型標籤
+            const slotLabel={armor:'防具 · 盔甲',helm:'防具 · 頭盔',shield:'防具 · 盾牌',gloves:'防具 · 手套',boots:'防具 · 長靴',cloak:'防具 · 斗篷',tshirt:'防具 · 貼身衣',shin:'防具 · 脛甲',ring:'飾品 · 戒指',amulet:'飾品 · 項鍊',ear:'飾品 · 耳環',doll:'飾品 · 魔法娃娃',belt:'飾品 · 腰帶',pet:'飾品 · 寵物'};
+            let typeLabel='';
+            if(item.type==='wpn'){typeLabel=item.isArrow?'箭矢':item.isBow?'武器 · 弓':item.qigu?'武器 · 奇古獸':item.w2h?'武器 · 雙手':'武器 · 單手';}
+            else if(item.type==='arm'){typeLabel=slotLabel[item.slot]||'防具';}
+            else if(item.type==='acc'){typeLabel=slotLabel[item.slot]||'飾品';}
+            else if(item.type==='skillbk')typeLabel='技能書';
+            else if(['pot','heal'].includes(item.type))typeLabel='消耗品 · 藥水';
+            else if(item.type==='scroll')typeLabel='消耗品 · 卷軸';
+            else if(['craft','etc','quest'].includes(item.type))typeLabel='材料 / 任務';
+            else typeLabel=item.type||'';
+            // 屬性
+            const stats=[];
+            if(item.dmgS||item.dmgL)stats.push(['攻擊(小/大)',`${item.dmgS||0} / ${item.dmgL||0}`]);
+            if(item.dmgBonus)stats.push(['額外傷害',`+${item.dmgBonus}`]);
+            if(item.magicDmg)stats.push(['魔法傷害',`+${item.magicDmg}`]);
+            if(item.hit)stats.push(['命中',`+${item.hit}`]);
+            if(item.rangedHit)stats.push(['遠距命中',`+${item.rangedHit}`]);
+            if(item.rangedDmg)stats.push(['遠距傷害',`+${item.rangedDmg}`]);
+            if(item.spd&&item.spd!==1)stats.push(['攻速倍率',item.spd]);
+            if(item.rapidfire)stats.push(['連射',`${item.rapidfire}%`]);
+            if(item.pierceChance)stats.push(['穿透機率',`${item.pierceChance}%`]);
+            if(item.ac)stats.push(['AC',item.ac]);
+            if(item.mr)stats.push(['MR',item.mr]);
+            if(item.block)stats.push(['格擋率',`${item.block}%`]);
+            if(item.mhp)stats.push(['HP上限',`+${item.mhp}`]);
+            if(item.mmp)stats.push(['MP上限',`+${item.mmp}`]);
+            if(item.hpR)stats.push(['HP自然恢復',`+${item.hpR}`]);
+            if(item.mpR)stats.push(['MP自然恢復',`+${item.mpR}`]);
+            ['str','dex','con','int','wis','cha'].forEach(s=>{if(item[s])stats.push([statN[s],`${item[s]>0?'+':''}${item[s]}`]);});
+            ['resFire','resWater','resEarth','resWind'].forEach(r=>{if(item[r])stats.push([resN[r],`+${item[r]}`]);});
+            if(item.magicDrNonEle)stats.push(['無屬性魔法減傷',item.magicDrNonEle]);
+            if(item.stunResist)stats.push(['暈眩抵抗',`${item.stunResist}%`]);
+            if(item.immStone)stats.push(['免疫石化','✔']);
+            if(item.unBonus)stats.push(['對不死/狼人','加成']);
+            if(item.dragonStrike)stats.push(['龍的一擊',item.dragonStrike]);
+            if(item.mrPerEn)stats.push(['每強化 MR',`+${item.mrPerEn}`]);
+            if(item.safe!=null)stats.push(['安定值',item.safe]);
+            if(item.req)stats.push(['適用職業',item.req.split(',').map(r=>reqMap[r]||r).join('/')]);
+            if(item.mdmg)stats.push(['魔法傷害',`+${item.mdmg}`]);
+            if(item.magicHit)stats.push(['魔法命中',`+${item.magicHit}`]);
+            if(item.meleeDmg)stats.push(['近距傷害',`+${item.meleeDmg}`]);
+            if(item.meleeHit)stats.push(['近距命中',`+${item.meleeHit}`]);
+            if(item.extraHit)stats.push(['額外命中',`+${item.extraHit}`]);
+            if(item.extraDmg)stats.push(['額外傷害',`+${item.extraDmg}`]);
+            if(item.extraMp)stats.push(['額外魔法點數',`+${item.extraMp}`]);
+            if(item.dr)stats.push(['傷害減免',`+${item.dr}`]);
+            if(item.er)stats.push(['ER迴避',`+${item.er}`]);
+            if(item.comboRate)stats.push(['連擊機率',`${item.comboRate}%`]);
+            if(item.vampPct)stats.push(['吸血',`${item.vampPct}%`]);
+            if(item.weightCap)stats.push(['負重上限',`+${item.weightCap}`]);
+            if(item.freezeResist)stats.push(['冰凍抵抗',`${item.freezeResist}%`]);
+            if(item.abnormalResist)stats.push(['異常狀態抵抗',`${item.abnormalResist}%`]);
+            if(item.stunHitBonus)stats.push(['暈眩命中加成',`+${item.stunHitBonus}`]);
+            if(item.goldBonus)stats.push(['金幣加成',`${item.goldBonus}%`]);
+            if(item.potionBonus)stats.push(['藥水回復加成',`${item.potionBonus}%`]);
+            if(item.expBonus)stats.push(['經驗加成',`${item.expBonus}%`]);
+            if(item.maxHold)stats.push(['攜帶上限',item.maxHold]);
+            if(item.ignHardSkin)stats.push(['無視硬皮減傷','✔']);
+            if(item.immPoison)stats.push(['免疫中毒','✔']);
+            if(item.immParalyze)stats.push(['免疫麻痺','✔']);
+            if(item.immSlow)stats.push(['免疫緩速','✔']);
+            if(item.noEnhance)stats.push(['無法強化','✔']);
+            if(item.dollTier)stats.push(['娃娃階級',`${item.dollTier} 階`]);
+            if(item.crushDr)stats.push(['重擊減傷',`${item.crushDr}%`]);
+            if(item.relic)stats.push(['類別','🏺 遺物（不可強化）']);
+            if(item.eff)stats.push(['特效',_IC_EFFMAP[item.eff]||item.eff]);
+            if(item.p)stats.push(['賣出價格',`${item.p.toLocaleString()} 幣`]);
+            // 掉落來源
+            let srcHtml='<div class="ic-no-src">此道具暫無已知怪物掉落來源</div>';
+            if(typeof dDrops!=='undefined'&&dDrops){
+                const srcs=[];
+                for(const [mob,drops] of Object.entries(dDrops)){
+                    if(mob==='items'||!Array.isArray(drops))continue;
+                    const f=drops.find(d=>d[0]===itemId);
+                    if(f){
+                        const mi=(typeof monsterInfoMap!=='undefined')?monsterInfoMap[mob]:null;
+                        srcs.push(`<li class="ic-src-item"><span class="ic-src-mob">${mob}${mi&&mi.boss?' ⚠ BOSS':''}</span></li>`);
+                    }
+                }
+                if(srcs.length) srcHtml=`<ul class="ic-src-list">${srcs.join('')}</ul>`;
+            }
+            // 說明
+            let descHtml='';
+            if(item.d){
+                const clean=item.d.replace(/<br\s*\/?>\s*/gi,'\n').replace(/<[^>]+>/g,'').trim();
+                descHtml=`<div class="ic-section-title">📖 說明</div><div class="ic-desc">${clean.replace(/\n/g,'<br>')}</div>`;
+            }
+            document.getElementById('icModalContent').innerHTML=`
+<h2 style="color:${titleColor}">${isL?'🏅 ':''}${item.n}</h2>
+<div class="ic-modal-sub">${typeLabel}</div>
+${stats.length?'<div class="ic-section-title">📊 屬性</div><div class="ic-stat-grid">'+stats.map(([l,v])=>`<div class="ic-stat-row"><span class="ic-stat-l">${l}</span><span class="ic-stat-v">${v}</span></div>`).join('')+'</div>':''}
+${descHtml}
+<div class="ic-section-title">🎯 掉落來源</div>
+${srcHtml}`;
+            document.getElementById('icOverlay').classList.add('open');
+        }
+
+        function closeIcModal() {
+            document.getElementById('icOverlay').classList.remove('open');
+        }
+
+        function initItemCatalog() {
+            buildIcSidebar();
+            // 預設展開第一組並顯示全武器
+            _icOpenG['wpn']=true;
+            icShowCat('wpn','wpn','⚔️ 武器');
+        }
+
+        const _TYPE_LABEL = { heal:'治癒', buff:'增益', atk:'攻擊', manual:'主動', passive:'被動', convert:'轉換' };
+        function renderSkillset(cls) {
+            if (cls) {
+                _ssCls = cls;
+                document.querySelectorAll('.ss-cls-btn').forEach(b => b.classList.toggle('active', b.getAttribute('data-cls') === cls));
+            }
+            const kw = (document.getElementById('ssSearch').value || '').trim().toLowerCase();
+            const box = document.getElementById('ssContent');
+            if (_ssCls === 'sets') { box.innerHTML = renderSets(kw); return; }
+            if (_ssCls === 'pet') { box.innerHTML = renderPetTab(kw); return; }
+            const list = (window.SKILLS_TAB[_ssCls] || []).filter(s => !kw || s.n.toLowerCase().includes(kw) || (s.eff || '').toLowerCase().includes(kw));
+            if (!list.length) { box.innerHTML = '<p style="color:#64748b; padding:10px;">查無符合的技能。</p>'; return; }
+            // 依 tier 分組
+            const groups = {};
+            list.forEach(s => { (groups[s.tier] = groups[s.tier] || []).push(s); });
+            let html = '';
+            Object.keys(groups).sort((a,b)=>a-b).forEach(t => {
+                html += `<div class="ss-tier-head">第 ${t} 階</div>`;
+                groups[t].forEach(s => {
+                    const passive = s.type === 'passive';
+                    html += `<div class="skill-card">
+                        <div class="sk-top">
+                            <span class="sk-name">${s.n}</span>
+                            <span class="sk-badges">
+                                <span class="sk-badge lv">Lv.${s.lv}</span>
+                                ${passive ? '<span class="sk-badge passive">被動</span>' : (s.mp ? `<span class="sk-badge mp">MP ${s.mp}</span>` : '')}
+                                <span class="sk-badge">${_TYPE_LABEL[s.type] || s.type}</span>
+                            </span>
+                        </div>
+                        ${s.eff ? `<div class="sk-eff">${s.eff}</div>` : ''}
+                        <div class="sk-meta">${s.bk ? '📘 ' + s.bk : ''}${s.rx ? (s.bk ? '　' : '') + '⚠ ' + s.rx : ''}</div>
+                    </div>`;
+                });
+            });
+            box.innerHTML = html;
+        }
+        function renderPetTab(kw) {
+            const base = [
+                ['哈士奇','水','Lv5','+3','+2'],
+                ['杜賓狗','火','Lv6','+5','+0'],
+                ['牧羊犬','地','Lv5','+4','+1'],
+                ['狼','風','Lv4','+1','+4']
+            ];
+            const evo = [
+                ['哈士奇','暴走兔','水','傷害+11、命中+5、魅力×1.2傷/×1.3命中','冰錐（水，單體）'],
+                ['杜賓狗','狐狸','火','傷害+18、命中+3、魅力×1.3傷/×1.2命中','燃燒的火球（火，全體AoE）'],
+                ['牧羊犬','小獵犬','地','傷害+15、命中+4、魅力×1.3傷/×1.2命中','岩牢（地，全體AoE）'],
+                ['狼','聖伯納','風','傷害+10、命中+6、魅力×1.2傷/×1.3命中','極道落雷（風，單體）']
+            ];
+            const gear = [
+                ['獵犬之牙','—','+2'],
+                ['鋼鐵之牙','+2','—'],
+                ['破滅之牙','+2','+3'],
+                ['勝利之牙','+3','+1']
+            ];
+            const f = (s)=> !kw || s.toLowerCase().includes(kw);
+            let h = '';
+            // 抓捕
+            h += '<div class="ss-tier-head">🪤 基礎寵物 — 抓捕取得</div>';
+            h += '<div class="set-card"><div class="set-bonus">使用「<b>肉</b>」進入<b>誘捕狀態</b>（可誘捕上限 = ⌊魅力 / 7⌋ 隻），在誘捕狀態下<b>擊殺對應野生犬，100% 獲得項圈</b>。</div></div>';
+            base.filter(b=>f(b[0])).forEach(b=>{
+                h += `<div class="set-card"><div class="set-name">${b[0]}　<span style="color:#67e8f9">${b[1]}屬</span></div><div class="set-items">野生怪 ${b[2]}　｜　傷害 ${b[3]}　命中 ${b[4]}</div></div>`;
+            });
+            // 進化
+            h += '<div class="ss-tier-head">🐾 進化 — 使用「進化果實」</div>';
+            h += '<div class="set-card"><div class="set-bonus"><b>進化條件</b>：玩家 Lv30 以上、持有對應基礎項圈、使用果實。<br><b>果實取得</b>：擊敗「對應屬性」怪物，<b>0.0001% × 怪物等級</b> 機率掉落（等級越高機率越高）。<br><b>觸發法術傷害</b>依玩家本體魔攻計算（吃怪物魔抗）。</div></div>';
+            evo.filter(e=>f(e[0])||f(e[1])).forEach(e=>{
+                h += `<div class="set-card"><div class="set-name">${e[0]} → <span style="color:#fbbf24">${e[1]}</span>　<span style="color:#67e8f9">${e[2]}屬</span></div><div class="set-items">能力：${e[3]}</div><div class="set-bonus">✦ 每擊 10% 觸發：<b>${e[4]}</b></div></div>`;
+            });
+            // 公式
+            h += '<div class="ss-tier-head">📐 進化寵物數值公式</div>';
+            h += '<div class="set-card"><div class="set-bonus">傷害 = 1D(玩家等級＋傷害加成) ＋ 魅力×傷害倍率 ＋ 寵物裝備<br>命中 = 玩家等級 ＋ 魅力×命中倍率 ＋ 命中加成 − 怪等級 ＋ 怪AC ＋ 寵物裝備</div></div>';
+            // 寵物裝備
+            h += '<div class="ss-tier-head">🦴 寵物裝備（之牙）</div>';
+            h += '<div class="set-card"><div class="set-bonus">裝在「<b>寵物裝備</b>」欄，<b>只加成所有項圈夥伴</b>、不影響玩家；可用「對飾品施法的卷軸」強化，上限 <b>+5</b>（每+1 各項 +1）。注意：重量仍算在玩家身上。</div></div>';
+            gear.filter(g=>f(g[0])).forEach(g=>{
+                h += `<div class="set-card"><div class="set-name">${g[0]}</div><div class="set-items">傷害 ${g[1]}　｜　命中 ${g[2]}</div></div>`;
+            });
+            if (!h) h = '<p style="color:#64748b; padding:10px;">查無符合項目。</p>';
+            return h;
+        }
+        function renderSets(kw) {
+            // 經典套裝
+            let html = '<div class="ss-tier-head">🛡️ 經典套裝（穿齊全套加成）</div>';
+            (window.SETS_TAB || []).filter(s => !kw || s.n.toLowerCase().includes(kw)).forEach(s => {
+                html += `<div class="set-card">
+                    <div class="set-name">${s.n}</div>
+                    <div class="set-items">📦 ${s.items.join('　+　')}</div>
+                    <div class="set-bonus">✦ 全套加成：${s.bonus || '—'}</div>
+                </div>`;
+            });
+            // 席琳套裝（36效果 12組，2/3/5件）
+            const SH = [
+                ["🦁 紅獅","2件 額外傷害+5、額外魔法點數+3｜3件 傷害減免+10｜5件 最終傷害+20%（普攻與技能皆適用）"],
+                ["🕊️ 白鳥","2件 額外命中+5｜3件 魅力+10｜5件 一般攻擊命中時使目標「脆弱」3秒（受所有傷害+20%，重複觸發刷新）"],
+                ["🛡️ 鐵衛","2件 AC-3、傷害減免+5｜3件 受到傷害減少20%｜5件 受到傷害時，額外對全體敵人造成一次必中的一般攻擊"],
+                ["💃 麗人","2件 近距離傷害+3、近距離命中+3｜3件 近距離爆擊率+3%｜5件 每觸發一次攻擊未命中，額外命中+10可堆疊，直到一次物理攻擊命中歸零"],
+                ["🍃 疾風","2件 遠距離傷害+3、遠距離命中+3｜3件 遠距離爆擊率+3%｜5件 連射傷害由30%提升為80%"],
+                ["🌙 月光","2件 額外傷害+2、額外命中+3｜3件 ER+5、MR+10｜5件 ER 也能迴避魔法攻擊（怪物必中技能改為先判定 ER）"],
+                ["📖 學徒","2件 MP自然恢復+5、額外魔法點數+6｜3件 魔法爆擊率+3%｜5件 MP 低於最大值30%時，所有技能 MP 消耗減半（MP回升超過30%即恢復）"],
+                ["🔮 魔女","2件 魔法傷害+3｜3件 水屬性抗性+10、額外魔法點數+5｜5件 每觸發 5 次共鳴，免費發動一次冰雪暴（無需學會）"],
+                ["🌑 暗影","2件 額外傷害+7｜3件 觸發迴避時恢復 2% HP｜5件 雙擊觸發的額外一般攻擊傷害加倍"],
+                ["🌀 幻覺","2件 魔法傷害命中時，恢復「等級/10」的MP｜3件 輔助技能消耗MP減少50%｜5件 敵人受到非自動攻擊技能的魔法傷害時，再次受到額外相同傷害（此額外傷害不再觸發套裝效果）"],
+                ["🐲 龍血","2件 造成物理傷害時恢復1%該傷害的HP（自身HP低於50%時改為5%）｜3件 施放消耗HP的技能可獲得「龍裔」10秒，受到傷害減少15%｜5件 消耗HP技能造成傷害提高20%"],
+                ["💢 狂怒","2件 負重上限+500｜3件 最大HP+20%｜5件 HP每少10%，造成傷害+4%、受到傷害-4%（最多±20%，即HP低於50%時達上限）"]
+            ];
+            html += '<div class="ss-tier-head">🔮 席琳套裝效果（收集<b>同名</b> 2/3/5 件即發動，任意裝備部位皆可累計；不再需要詞綴組合）</div>';
+            SH.filter(g => !kw || g[0].includes(kw) || g[1].includes(kw)).forEach(g => {
+                html += `<div class="sherine-grp">
+                    <span class="sg-name">${g[0]}套裝</span>
+                    <div class="sg-bonus">${g[1].split('｜').join('<br>')}</div>
+                </div>`;
+            });
+            return html;
+        }
+
+        function renderCards(data) {
+            const grid = document.getElementById('monsterGrid');
+            grid.innerHTML = '';
+
+            const entries = Object.entries(data);
+
+            if (entries.length === 0) {
+                grid.innerHTML = '<div class="no-results">❌ 找不到相符的怪物、地圖或掉落物資訊</div>';
+                return;
+            }
+
+            entries.forEach(([monsterName, drops]) => {
+                if (monsterName === 'items') return;
+
+                const card = document.createElement('div');
+                card.className = 'monster-card';
+
+                const mobInfo = monsterInfoMap[monsterName];
+                const mobId = monsterNameToIdMap[monsterName];
+
+                // --- 🌟 BOSS 標籤與黃金字體邏輯 ---
+                let bossBadge = '';
+                let monsterNameStyle = '';
+                if (mobInfo && mobInfo.boss === true) {
+                    bossBadge = `<span class="meta-badge" style="color: #fbbf24; border-color: rgba(251, 191, 36, 0.4); background: rgba(251, 191, 36, 0.1); font-weight: bold; margin-bottom: 8px; display: inline-block;">👑 BOSS</span>`;
+                    monsterNameStyle = 'color: #fbbf24; text-shadow: 0 0 8px rgba(251, 191, 36, 0.4); font-weight: 800;';
+                }
+
+                let metaHtml = '';
+                let locationHtml = '';
+                let skillsHtml = '';
+
+                if (mobInfo) {
+                    const elementMapping = {
+                        'fire': '🔥 火屬性', 'earth': '🌱 地屬性',
+                        'wind': '💨 風屬性', 'water': '💧 水屬性', 'none': '無屬性'
+                    };
+                    const eleText = elementMapping[mobInfo.e] || mobInfo.e || '無屬性';
+                    const behClass = mobInfo.beh === '主動' ? 'active-behavior' : 'passive-behavior';
+
+                    const isMad = currentWorldMode === 'mad';
+                    const isSherine = currentWorldMode === 'sherine' || isMad;
+                    const isClassicM = currentWorldMode === 'classic';
+                    const sm = isSherine ? applySherineStats(mobInfo, isMad) : mobInfo;
+                    const lv = mobInfo.lv || 1;
+                    const drBonus = isSherine ? Math.floor(lv / 3) : 0;
+
+                    const hpHtml   = isSherine ? `<span class="sherine-stat sherine-stat-up">HP:${sm.hp}</span>` : `HP:${mobInfo.hp || '?'}`;
+                    const acHtml   = isSherine ? `<span class="sherine-stat sherine-stat-up">AC:${sm.ac}</span>` : `AC:${mobInfo.ac ?? '?'}`;
+                    const mrHtml   = isSherine ? `<span class="sherine-stat sherine-stat-up">MR:${sm.mr}%</span>` : `MR:${mobInfo.mr || '0'}%`;
+                    const drHtml   = isSherine && drBonus > 0 ? `<span class="meta-badge sherine-stat sherine-stat-up">傷免+${drBonus}</span>` : '';
+                    const atkHtml  = isSherine ? `<span class="meta-badge sherine-stat">攻擊×${isMad ? 3 : 2}</span>` : '';
+                    const expHtml  = isSherine ? `<span class="meta-badge" style="color:#fbbf24;">經驗×${isMad ? 10 : 5}</span>` : (isClassicM ? `<span class="meta-badge" style="color:#fbbf24;">經驗×½</span>` : '');
+                    const goldHtml = isSherine ? `<span class="meta-badge" style="color:#fbbf24;">金錢×${isMad ? 10 : 5}</span>` : (isClassicM ? `<span class="meta-badge" style="color:#fbbf24;">金錢×10%</span>` : '');
+
+                    // 🛡️ 硬皮徽章（物理減傷；新版已降低且席琳世界不再加成。城門=玩家等級、守護塔=玩家等級÷2）
+                    const _hs = HARD_MOBS.has(mobId) ? calcHardSkin(mobInfo) : null;
+                    let hardHtml = '';
+                    if (_hs) {
+                        const _hardStyle = 'color:#fcd34d; border-color:rgba(252,211,77,0.45); background:rgba(252,211,77,0.1);';
+                        const _val = _hs.building ? _hs.formula : _hs.base;
+                        hardHtml = `<span class="meta-badge" style="${_hardStyle}">🛡️ 硬皮:${_val}</span>`;
+                    }
+
+                    metaHtml = `
+                <div class="monster-meta">
+                    <span class="meta-badge" style="color:#38bdf8; font-weight:bold;">Lv.${mobInfo.lv || '?'}</span>
+                    <span class="meta-badge ${behClass}">${mobInfo.beh || '被動'}</span>
+                    <span class="meta-badge">種族: ${mobInfo.race || '未註明'}</span>
+                    <span class="meta-badge">${eleText}</span>
+                    <span class="meta-badge">${hpHtml}</span>
+                    <span class="meta-badge">${acHtml}</span>
+                    <span class="meta-badge">${mrHtml}</span>
+                    ${hardHtml}
+                    ${drHtml}${atkHtml}${expHtml}${goldHtml}
+                </div>`;
+                }
+
+                // 招式：招式名稱＋屬性＋效果關鍵字（依需求「不顯示魔法造成傷害數據」，故不輸出 dmg/db/機率等數值）
+                if (mobInfo) {
+                    const skEle = { fire: '🔥火', earth: '🌱地', wind: '💨風', water: '💧水', none: '無屬性' };
+                    const skType = { extra_attack: '追加攻擊', multi_attack: '多重攻擊', self_buff: '自我強化', self_haste: '自我加速', pledge_bless: '生命祝福', call_ally: '呼喚盟友', poison: '中毒', burn: '燒傷', armor_break: '破壞盔甲', stone: '石化', paralyze: '麻痺', magicseal: '魔法封印', stun: '暈眩', frost_breath: '驅散增益·減速' };
+                    const secType = { freeze: '冰凍', burn: '燒傷', scald: '灼燒', stone: '石化', sleep: '沉睡', stun: '暈眩', paralyze: '麻痺' };
+                    const skills = ['mag', 'mag2', 'mag3'].map(k => mobInfo[k]).filter(Boolean);
+                    if (skills.length) {
+                        const chips = skills.map(sk => {
+                            const tags = [];
+                            if (sk.ele) tags.push(skEle[sk.ele] || sk.ele);
+                            if (sk.fixedDmg) tags.push('固定傷害');
+                            if (sk.type && skType[sk.type]) tags.push(skType[sk.type]);
+                            if (sk.sec && sk.sec.type && secType[sk.sec.type]) tags.push(secType[sk.sec.type]);
+                            if (sk.stunChance) tags.push('暈眩');
+                            const tagStr = tags.length ? ` <span style="opacity:.85;">[${tags.join('·')}]</span>` : '';
+                            return `<span class="skill-chip">⚡ ${sk.skn}${tagStr}</span>`;
+                        }).join('');
+                        skillsHtml = `<div class="monster-skills">${chips}</div>`;
+                    }
+                }
+
+                if (mobId && mobIdToZonesMap[mobId] && mobIdToZonesMap[mobId].length > 0) {
+                    const locs = mobIdToZonesMap[mobId].join(' / ');
+                    locationHtml = `<div class="monster-location">📍 🗺️ ${locs}</div>`;
+                }
+
+                let html = `
+            <div class="monster-header">
+                ${bossBadge}
+                <h2 class="monster-name" style="${monsterNameStyle}">${monsterName}</h2>
+                ${metaHtml}
+                ${skillsHtml}
+                ${locationHtml}
+            </div>
+            <ul class="drop-list" style="list-style: none; padding: 0; margin: 0;">`;
+
+                if (Array.isArray(drops)) {
+                    drops.forEach(drop => {
+                        const itemCode = drop[0];
+                        const itemName = translate(itemCode);
+                        const baseRate = drop[1];
+                        const isMadD = currentWorldMode === 'mad';
+                        const isSherine = currentWorldMode === 'sherine' || isMadD;
+                        const isClassic = currentWorldMode === 'classic';
+                        const rate = isSherine ? applyShineDropRate(baseRate, isMadD) : (isClassic ? applyClassicDropRate(baseRate) : baseRate);
+                        const rateClass = getRateClass(rate);
+                        const itemInfo = window.ITEMS_DB ? window.ITEMS_DB[itemCode] : null;
+                        let tooltipText = "";
+
+                        if (itemInfo) {
+                            let details = [];
+                            const II = itemInfo;
+                            const reqMap = { all: "全職業", elf: "妖精", knight: "騎士", pr: "王族", mage: "法師", dark: "黑暗妖精", illusion: "幻術士", dragon: "龍騎士", warrior: "戰士", royal: "王族" };
+                            const statN = { str:'力', dex:'敏', con:'體', int:'智', wis:'精神', cha:'魅' };
+                            if (II.legend) details.push('🏅 頭目專屬傳說裝備');
+                            // 武器攻擊
+                            if (II.dmgS || II.dmgL) details.push(`攻擊(小/大): ${II.dmgS || 0}/${II.dmgL || 0}`);
+                            if (II.dmgBonus) details.push(`額外傷害: +${II.dmgBonus}`);
+                            if (II.mdmg) details.push(`魔法傷害: ${II.mdmg > 0 ? '+' : ''}${II.mdmg}`);
+                            if (II.hit) details.push(`命中: +${II.hit}`);
+                            if (II.rangedHit) details.push(`遠距離命中: +${II.rangedHit}`);
+                            if (II.spd && II.spd !== 1) details.push(`攻速倍率: ${II.spd}`);
+                            if (II.isBow || II.ranged) details.push('遠程武器(弓)');
+                            if (II.rapidfire) details.push(`連射: ${II.rapidfire}%`);
+                            if (II.w2h) details.push('雙手武器');
+                            if (II.isArrow) details.push('箭矢');
+                            if (II.pierceChance) details.push(`穿透機率: ${II.pierceChance}%`);
+                            if (II.dragonStrike) details.push(`龍的一擊: ${II.dragonStrike}`);
+                            if (II.hardWear) details.push('額外削減硬皮');
+                            if (II.armguard) { const agN={dr:'額外減傷',magicDmg:'魔法傷害',mhp:'HP上限',rangedDmg:'遠距離傷害',meleeDmg:'近距離傷害',ac:'AC',hit:'命中'}; const ag=II.armguard; const th=Array.isArray(ag.th)?ag.th:[]; details.push(`臂甲(副手): ${agN[ag.stat]||ag.stat} 基礎+${ag.base||0}` + (th.length?`，強化達+5/+7/+9 時升為 +${th[0]}/+${th[1]}/+${th[2]}(取最高階、非累加)`:'')); }
+                            // 防禦
+                            if (II.ac) details.push(`AC: ${II.ac}`);
+                            if (II.mr) details.push(`MR: ${II.mr}`);
+                            if (II.block) details.push(`格擋率: ${II.block}%`);
+                            if (II.magicDrNonEle) details.push(`無屬性魔法減傷: ${II.magicDrNonEle}`);
+                            if (II.immStone) details.push('免疫石化');
+                            if (II.stunResist) details.push(`暈眩抵抗: ${II.stunResist}%`);
+                            // HP/MP
+                            if (II.mhp) details.push(`HP上限: +${II.mhp}`);
+                            if (II.mmp) details.push(`MP上限: +${II.mmp}`);
+                            if (II.hpR) details.push(`HP自然恢復: +${II.hpR}`);
+                            if (II.mpR) details.push(`MP自然恢復: +${II.mpR}`);
+                            if (II.mpROverSafe) details.push(`突破安定值每階MP恢復: +${II.mpROverSafe}`);
+                            if (II.mrPerEn) details.push(`每強化 MR: +${II.mrPerEn}`);
+                            if (II.extraMpPerEn) details.push(`每強化 額外MP: +${II.extraMpPerEn}`);
+                            if (II.meleeHitPerEn) details.push(`每強化 近距命中: +${II.meleeHitPerEn}`);
+                            // 屬性
+                            ['str','dex','con','int','wis','cha'].forEach(s => { if (II[s]) details.push(`${statN[s]}: +${II[s]}`); });
+                            // 屬性抗性
+                            const resN = { resFire:'火抗', resWater:'水抗', resEarth:'地抗', resWind:'風抗' };
+                            ['resFire','resWater','resEarth','resWind'].forEach(r => { if (II[r]) details.push(`${resN[r]}: +${II[r]}`); });
+                            // 其他
+                            if (II.weightCap) details.push(`負重上限: +${II.weightCap}`);
+                            if (II.dur) details.push(`持續時間: ${II.dur}`);
+                            if (typeof II.val === 'number' && II.val) details.push(`數值: ${II.val}`);
+                            if (II.pstat) details.push(`提升屬性: ${statN[II.pstat] || II.pstat}`);
+                            if (II.unBonus) details.push('對不死/狼人加成');
+                            // 技能/觸發
+                            if (II.sk) details.push('賦予技能(技能書)');
+                            if (II.grantSkills) details.push(`附帶技能: ${(Array.isArray(II.grantSkills)?II.grantSkills:[II.grantSkills]).map(s=>helmSkillMap[s]||s).join('、')}`);
+                            if (II.procSkill) details.push('攻擊機率觸發技能');
+                            if (II.spellProc) details.push(`施放${II.spellProc.skn || '魔法'}`);
+                            if (II.meleeHitSpell) details.push(`命中觸發${II.meleeHitSpell.skn || '魔法'}`);
+                            // 安定/職業/特效/價格/說明
+                            if (II.safe !== undefined) details.push(`安定: ${II.safe}`);
+                            if (II.req) details.push(`職業: ${II.req.split(',').map(r => reqMap[r] || r).join('/')}`);
+                            if (II.eff) details.push(`特效: ${effMap[II.eff] || II.eff}`);
+                            if (II.p) details.push(`價格: ${II.p} 幣`);
+                            if (II.d) details.push(`說明: ${II.d}`);
+                            tooltipText = details.length > 0 ? details.join(' | ') : "無特殊屬性";
+                        } else {
+                            tooltipText = "無詳細資料";
+                        }
+
+                        // 懸浮視窗修正：CSS content:attr(data-tooltip) 無法渲染 HTML，
+                        // 先把 <br> 轉換行，再移除其餘 HTML 標籤（如 <span class='text-amber-300'>），
+                        // 避免原始標籤字樣直接顯示在懸浮視窗中；並轉義雙引號以免破壞 data-tooltip 屬性。
+                        tooltipText = tooltipText
+                            .replace(/<br\s*\/?>/gi, '\n')
+                            .replace(/<\/?[a-zA-Z][^>]*>/g, '')
+                            .replace(/\n{3,}/g, '\n\n')
+                            .replace(/[ \t]+\n/g, '\n')
+                            .trim()
+                            .replace(/"/g, '&quot;');
+
+                        const multiplierTag = isSherine
+                            ? (isMadD
+                                ? `<span class="drop-rate-multiplier" title="瘋狂的席琳世界：掉落率×5" style="color:#f87171;border-color:#f87171;">×5</span>`
+                                : `<span class="drop-rate-multiplier" title="席琳的世界：掉落率×3">×3</span>`)
+                            : (isClassic ? `<span class="drop-rate-multiplier" title="經典模式：掉落率×1/10" style="color:#fbbf24;border-color:#fbbf24;">×1/10</span>` : '');
+
+                        html += `
+                    <li class="drop-item tooltip" data-tooltip="${tooltipText}" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background-color: rgba(15, 23, 42, 0.3); border-radius: 6px; margin-bottom: 6px; font-size: 0.9rem; position: relative; cursor: help;">
+                        <span class="item-name">${(itemInfo && itemInfo.legend) ? '<span title="頭目專屬傳說裝備" style="color:#fca5a5;">🏅</span> ' : ''}${itemName}${srcBadges(itemCode)}</span>
+                        <span>${multiplierTag}<span class="item-rate ${rateClass}">${rate}%</span></span>
+                    </li>`;
+                    });
+                }
+                html += `</ul>`;
+                card.innerHTML = html;
+                grid.appendChild(card);
+            });
+        }
+
+        function filterData() {
+            const query = document.getElementById('searchInput').value.toLowerCase().trim();
+            if (!query) {
+                renderCards(dDrops);
+                return;
+            }
+
+            const filtered = {};
+            for (const [monster, drops] of Object.entries(dDrops)) {
+                if (monster === 'items') continue;
+
+                const mobInfo = monsterInfoMap[monster];
+                const mobId = monsterNameToIdMap[monster];
+                
+                const matchMonster = monster.toLowerCase().includes(query);
+                const isBossQuery = (query === 'boss' || query === '王' || query === '首領');
+                const matchBoss = isBossQuery && (mobInfo && mobInfo.boss === true);
+
+                let matchMeta = false;
+                if (mobInfo) {
+                    const raceText = (mobInfo.race || '').toLowerCase();
+                    const behText = (mobInfo.beh || '').toLowerCase();
+                    const eleText = (mobInfo.e || '').toLowerCase();
+                    if (raceText.includes(query) || behText.includes(query) || eleText.includes(query)) {
+                        matchMeta = true;
+                    }
+                    if (!matchMeta && eleText) {
+                        const attributeMap = {
+                            '火': 'fire', '火屬性': 'fire', 'fire': 'fire',
+                            '水': 'water', '水屬性': 'water', 'water': 'water',
+                            '風': 'wind', '風屬性': 'wind', 'wind': 'wind',
+                            '地': 'earth', '地屬性': 'earth', 'earth': 'earth',
+                            '無': 'none', '無屬性': 'none', 'none': 'none'
+                        };
+                        if (attributeMap[query] === eleText || (eleText + '屬性').includes(query)) {
+                            matchMeta = true;
+                        }
+                    }
+                }
+
+                let matchLocation = false;
+                if (mobId && mobIdToZonesMap[mobId]) {
+                    const zonesString = mobIdToZonesMap[mobId].join('').toLowerCase();
+                    if (zonesString.includes(query)) {
+                        matchLocation = true;
+                    }
+                }
+
+                let matchingDrops = [];
+                if (Array.isArray(drops)) {
+                    matchingDrops = drops.filter(drop => {
+                        const itemName = translate(drop[0]).toLowerCase();
+                        return itemName.includes(query);
+                    });
+                }
+
+                if (matchMonster || matchMeta || matchLocation || matchBoss) {
+                    filtered[monster] = drops;
+                } else if (matchingDrops.length > 0) {
+                    filtered[monster] = matchingDrops;
+                }
+            }
+            renderCards(filtered);
+        }
+
+        window.onload = () => {
+            _renderDbSourceBadge();
+            renderCards(dDrops);
+        };
+</script>
+</body>
+</html>
